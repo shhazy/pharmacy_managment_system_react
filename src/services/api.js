@@ -1,5 +1,13 @@
 // API service - centralized API calls
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+export const APP_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:5173';
+
+export const getTenantURL = (tenantId = '') => {
+    const url = new URL(APP_BASE_URL);
+    const host = url.host;
+    if (!tenantId) return APP_BASE_URL;
+    return `${url.protocol}//${tenantId}.${host}`;
+};
 
 // Helper to get auth headers
 const getAuthHeaders = (tenantId = null) => {

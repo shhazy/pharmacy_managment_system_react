@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pill, ShieldCheck, Database } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, getTenantURL } from '../services/api';
 
 const Login = ({ setToken, setTenant, tenant }) => {
     const [tenantId, setTenantId] = useState(tenant || '');
@@ -49,7 +49,7 @@ const Login = ({ setToken, setTenant, tenant }) => {
             // jump to the correct one professionally.
             if (tenantId && tenantId !== detectedSubdomain) {
                 console.log(`Switching domains from ${detectedSubdomain || 'main'} to ${tenantId}`);
-                window.location.href = `http://${tenantId}.localhost:5173/login?token=${data.access_token}`;
+                window.location.href = `${getTenantURL(tenantId)}/login?token=${data.access_token}`;
                 return;
             }
 

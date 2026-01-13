@@ -28,7 +28,9 @@ const getTenantId = () => {
 
     const host = window.location.hostname;
     const parts = host.split('.');
-    if (parts.length > 1) {
+    const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
+
+    if (!isIP && parts.length > 1) {
         if (parts[parts.length - 1] === 'localhost') {
             if (parts.length === 2) return parts[0];
         } else if (parts.length >= 3) {

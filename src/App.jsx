@@ -44,7 +44,9 @@ function App() {
         const parts = host.split('.');
         let detected = '';
 
-        if (parts.length > 1) {
+        const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
+
+        if (!isIP && parts.length > 1) {
             if (parts[parts.length - 1] === 'localhost') {
                 if (parts.length === 2) detected = parts[0];
             } else if (parts.length >= 3) {
@@ -69,16 +71,19 @@ function App() {
                 setIsSuperAdmin(isSA);
 
                 // --- STRICT SESSION VALIDATION & AUTO-CORRECTION ---
-                if (!isSA && tokenTenant && tokenTenant !== detected) {
-                    console.warn(`Redirecting to correct tenant: ${tokenTenant}`);
-                    window.location.href = `${getTenantURL(tokenTenant)}/dashboard`;
-                    return;
-                }
+                // Only redirect if we are not on an IP address (where subdomains don't exist)
+                if (!isIP) {
+                    if (!isSA && tokenTenant && tokenTenant !== detected) {
+                        console.warn(`Redirecting to correct tenant: ${tokenTenant}`);
+                        window.location.href = `${getTenantURL(tokenTenant)}/dashboard`;
+                        return;
+                    }
 
-                if (isSA && detected) {
-                    console.warn("SuperAdmin on subdomain not allowed. Moving to main site.");
-                    window.location.href = `${APP_BASE_URL}/dashboard`;
-                    return;
+                    if (isSA && detected) {
+                        console.warn("SuperAdmin on subdomain not allowed. Moving to main site.");
+                        window.location.href = `${APP_BASE_URL}/dashboard`;
+                        return;
+                    }
                 }
             } catch (e) {
                 console.error("Session error", e);

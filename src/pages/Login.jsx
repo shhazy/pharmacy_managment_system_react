@@ -36,7 +36,8 @@ const Login = ({ setToken, setTenant, tenant }) => {
             const currentHost = window.location.hostname;
             const parts = currentHost.split('.');
             let detectedSubdomain = '';
-            if (parts.length > 1) {
+            const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
+            if (!isIP && parts.length > 1) {
                 if (parts[parts.length - 1] === 'localhost') {
                     if (parts.length === 2) detectedSubdomain = parts[0];
                 } else if (parts.length >= 3) {
@@ -46,8 +47,8 @@ const Login = ({ setToken, setTenant, tenant }) => {
 
             // --- UNIVERSAL SUBDOMAIN REDIRECTION ---
             // If the pharmacy ID used at login doesn't match the current browser domain, 
-            // jump to the correct one professionally.
-            if (tenantId && tenantId !== detectedSubdomain) {
+            // jump to the correct one professionally, but only if we ARE using domains (not IPs).
+            if (!isIP && tenantId && tenantId !== detectedSubdomain) {
                 console.log(`Switching domains from ${detectedSubdomain || 'main'} to ${tenantId}`);
                 window.location.href = `${getTenantURL(tenantId)}/login?token=${data.access_token}`;
                 return;

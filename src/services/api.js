@@ -21,22 +21,18 @@ const getAuthHeaders = (tenantId = null) => {
     return headers;
 };
 
-// Helper to get tenant from localStorage or detect from URL
+// Helper to get tenant detected from URL
 export const getTenantId = () => {
-    // Priority 1: Check localStorage (manual override/cache)
-    const stored = localStorage.getItem('tenant_id');
-    if (stored) return stored;
-
-    // Priority 2: Subdomain detection relative to APP_BASE_URL
+    // Priority: Subdomain detection relative to APP_BASE_URL
     try {
         const baseUrl = new URL(APP_BASE_URL);
         const baseHost = baseUrl.hostname;
         const currentHost = window.location.hostname;
 
-        // If the current host exactly matches the base host, no subdomain
+        // 1. Exact match - main site
         if (currentHost === baseHost) return null;
 
-        // If it ends with .baseHost, calculate the subdomain
+        // 2. Subdomain check
         if (currentHost.endsWith(`.${baseHost}`)) {
             return currentHost.replace(`.${baseHost}`, '');
         }

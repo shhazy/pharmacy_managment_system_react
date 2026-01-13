@@ -665,7 +665,7 @@ const TenantManager = () => {
         setMsg({ type: '', text: '' });
 
         try {
-            const res = await fetch(`${API_BASE_URL}/tenants`, {
+            const res = await fetch(`${API_BASE_URL}/tenants/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -749,7 +749,7 @@ const TenantList = () => {
 
     const fetchTenants = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/tenants`, {
+            const res = await fetch(`${API_BASE_URL}/tenants/`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             if (res.ok) setTenants(await res.json());
@@ -818,10 +818,10 @@ const InventoryManager = ({ tenantId }) => {
         setLoading(true);
         try {
             const [mRes, cRes, mnRes, sRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/inventory`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/categories`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/manufacturers`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/stores`, { headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+                fetch(`${API_BASE_URL}/inventory/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL}/categories/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL}/manufacturers/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL}/stores/`, { headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
             ]);
             if (mRes.ok) setMedicines(await mRes.json());
             if (cRes.ok) setCategories(await cRes.json());

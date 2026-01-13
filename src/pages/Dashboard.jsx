@@ -35,7 +35,8 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
 
     useEffect(() => {
         const titleLabel = activeView === 'Overview' ? 'Dashboard' : activeView.replace(/([A-Z])/g, ' $1').trim();
-        document.title = `${titleLabel} | ${tenant.charAt(0).toUpperCase() + tenant.slice(1)} Pharma`;
+        const tenantLabel = tenant ? (tenant.charAt(0).toUpperCase() + tenant.slice(1)) : 'Central';
+        document.title = `${titleLabel} | ${tenantLabel} Pharma`;
     }, [activeView, tenant]);
 
     useEffect(() => {
@@ -76,7 +77,7 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                         <LayoutGrid size={24} color="white" />
                     </div>
                     <h2 style={{ fontSize: '1.2rem' }}>
-                        {isSuperAdmin ? 'SuperAdmin Panel' : `${tenant.charAt(0).toUpperCase() + tenant.slice(1)} Pharma`}
+                        {isSuperAdmin ? 'SuperAdmin Panel' : (tenant ? `${tenant.charAt(0).toUpperCase() + tenant.slice(1)} Pharma` : 'Pharmacy Hub')}
                     </h2>
                 </div>
 

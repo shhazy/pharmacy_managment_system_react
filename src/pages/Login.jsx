@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pill, ShieldCheck, Database } from 'lucide-react';
-import { API_BASE_URL, getTenantURL } from '../services/api';
+import { API_BASE_URL, getTenantURL, getTenantId } from '../services/api';
 
 const Login = ({ setToken, setTenant, tenant }) => {
     const [tenantId, setTenantId] = useState(tenant || '');
@@ -34,16 +34,8 @@ const Login = ({ setToken, setTenant, tenant }) => {
 
             const data = await response.json();
             const currentHost = window.location.hostname;
-            const parts = currentHost.split('.');
-            let detectedSubdomain = '';
-            const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
-            if (!isIP && parts.length > 1) {
-                if (parts[parts.length - 1] === 'localhost') {
-                    if (parts.length === 2) detectedSubdomain = parts[0];
-                } else if (parts.length >= 3) {
-                    detectedSubdomain = parts[0];
-                }
-            }
+            const isIP = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(currentHost);
+            const detectedSubdomain = getTenantId();
 
             // --- UNIVERSAL SUBDOMAIN REDIRECTION ---
             // If the pharmacy ID used at login doesn't match the current browser domain, 

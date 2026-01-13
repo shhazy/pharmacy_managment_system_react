@@ -22,21 +22,28 @@ const getAuthHeaders = (tenantId = null) => {
 };
 
 // Helper to get tenant from localStorage or detect from URL
-const getTenantId = () => {
+export const getTenantId = () => {
+    // Priority 1: Check localStorage (manual override/cache)
     const stored = localStorage.getItem('tenant_id');
     if (stored) return stored;
 
-    const host = window.location.hostname;
-    const parts = host.split('.');
-    const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
+    // Priority 2: Subdomain detection relative to APP_BASE_URL
+    try {
+        const baseUrl = new URL(APP_BASE_URL);
+        const baseHost = baseUrl.hostname;
+        const currentHost = window.location.hostname;
 
-    if (!isIP && parts.length > 1) {
-        if (parts[parts.length - 1] === 'localhost') {
-            if (parts.length === 2) return parts[0];
-        } else if (parts.length >= 3) {
-            return parts[0];
+        // If the current host exactly matches the base host, no subdomain
+        if (currentHost === baseHost) return null;
+
+        // If it ends with .baseHost, calculate the subdomain
+        if (currentHost.endsWith(`.${baseHost}`)) {
+            return currentHost.replace(`.${baseHost}`, '');
         }
+    } catch (e) {
+        console.error("Error detecting tenant from URL", e);
     }
+
     return null;
 };
 

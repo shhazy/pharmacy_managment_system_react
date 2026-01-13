@@ -3,7 +3,7 @@ import Login from './pages/Login';
 import SuperAdminLogin from './pages/SuperAdminLogin';
 import Dashboard from './pages/Dashboard';
 import { useState, useEffect } from 'react';
-import { APP_BASE_URL, getTenantURL } from './services/api';
+import { APP_BASE_URL, getTenantURL, getTenantId } from './services/api';
 
 function App() {
     const [tenant, setTenant] = useState(localStorage.getItem('tenant_id') || '');
@@ -40,21 +40,12 @@ function App() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        const host = window.location.hostname;
-        const parts = host.split('.');
-        let detected = '';
+        const currentHost = window.location.hostname;
+        const baseHost = new URL(APP_BASE_URL).hostname;
+        const isIP = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(currentHost);
+        const detected = getTenantId();
 
-        const isIP = parts.length === 4 && parts.every(p => !isNaN(p) && p !== '');
-
-        if (!isIP && parts.length > 1) {
-            if (parts[parts.length - 1] === 'localhost') {
-                if (parts.length === 2) detected = parts[0];
-            } else if (parts.length >= 3) {
-                detected = parts[0];
-            }
-        }
-
-        console.log("Subdomain Detection:", { detected, urlTokenPresent: !!urlToken });
+        console.log("Subdomain Detection:", { detected, currentHost, baseHost, isIP });
 
         if (detected !== tenant) {
             setTenant(detected);
@@ -71,9 +62,9 @@ function App() {
                 setIsSuperAdmin(isSA);
 
                 // --- STRICT SESSION VALIDATION & AUTO-CORRECTION ---
-                // Only redirect if we are not on an IP address (where subdomains don't exist)
+                // Only redirect if a domain-based subdomain structure exists (not raw IPs without nip.io)
                 if (!isIP) {
-                    if (!isSA && tokenTenant && tokenTenant !== detected) {
+                    if (!isSA && tokenTenant && tokenTenant !== (detected || '')) {
                         console.warn(`Redirecting to correct tenant: ${tokenTenant}`);
                         window.location.href = `${getTenantURL(tokenTenant)}/dashboard`;
                         return;

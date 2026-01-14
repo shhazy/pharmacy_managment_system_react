@@ -5,6 +5,8 @@ import ProductDefinition from './ProductDefinition';
 import NavDropdown from '../components/NavDropdown';
 import InventoryCRUDManager from './InventoryCRUDManager';
 import ProductList from './ProductList';
+import PurchaseOrder from './PurchaseOrder';
+import GRN from './GRN';
 import { API_BASE_URL } from '../services/api';
 
 const Dashboard = ({ tenant, isSuperAdmin }) => {
@@ -131,9 +133,21 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     />
                                     <NavItem
                                         icon={<ShoppingCart size={20} />} // Changed icon for suppliers below
-                                        label="Suppliers & PO"
+                                        label="Suppliers"
                                         active={activeView === 'Suppliers'}
                                         onClick={() => setActiveView('Suppliers')}
+                                    />
+                                    <NavItem
+                                        icon={<Package size={20} />}
+                                        label="Purchase Order (PO)"
+                                        active={activeView === 'PurchaseOrder'}
+                                        onClick={() => setActiveView('PurchaseOrder')}
+                                    />
+                                    <NavItem
+                                        icon={<Truck size={20} />}
+                                        label="Goods Receipt (GRN)"
+                                        active={activeView === 'GRN'}
+                                        onClick={() => setActiveView('GRN')}
                                     />
                                     <NavItem
                                         icon={<Users size={20} />}
@@ -183,7 +197,8 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                 `Inventory - ${activeView.replace(/([A-Z])/g, ' $1').trim()}` :
                                                 activeView === 'Staff' ? 'Staff Management' :
                                                     activeView === 'Inventory' ? 'Inventory Explorer' :
-                                                        activeView === 'POS' ? 'Retail POS Terminal' : 'Dashboard Hub'}
+                                                        activeView === 'POS' ? 'Retail POS Terminal' :
+                                                            activeView === 'PurchaseOrder' ? 'Procurement & Purchase Order' : 'Dashboard Hub'}
                             </h1>
                             {!isSuperAdmin && (
                                 <span style={{
@@ -246,8 +261,10 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                                                     activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
                                                                                         activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
                                                                                             activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
-                                                                                                activeView === 'Reports' ? <AnalyticsDashboard tenantId={tenant} /> :
-                                                                                                    <DashboardOverview tenantId={tenant} />
+                                                                                                activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
+                                                                                                    activeView === 'GRN' ? <GRN tenantId={tenant} /> :
+                                                                                                        activeView === 'Reports' ? <AnalyticsDashboard tenantId={tenant} /> :
+                                                                                                            <DashboardOverview tenantId={tenant} />
                 )}
             </main>
         </div>

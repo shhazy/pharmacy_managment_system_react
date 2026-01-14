@@ -30,17 +30,16 @@ export const getTenantId = () => {
         const currentHost = window.location.hostname;
 
         // 1. Exact match - main site
-        if (currentHost === baseHost) return null;
-
-        // 2. Subdomain check
-        if (currentHost.endsWith(`.${baseHost}`)) {
+        // If current host is NOT main host, check subdomain
+        if (currentHost !== baseHost && currentHost.endsWith(`.${baseHost}`)) {
             return currentHost.replace(`.${baseHost}`, '');
         }
     } catch (e) {
         console.error("Error detecting tenant from URL", e);
     }
 
-    return null;
+    // Fallback: localStorage (for localhost or non-subdomain usage)
+    return localStorage.getItem('tenant_id');
 };
 
 // Generic fetch wrapper
@@ -58,6 +57,12 @@ const apiCall = async (endpoint, options = {}) => {
 
     if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        // Handle 401 specifically?
+        if (response.status === 401) {
+            // Optional: Logout if token expired
+            // localStorage.removeItem('token');
+            // window.location.href = '/login';
+        }
         throw new Error(error.detail || 'Request failed');
     }
 
@@ -106,16 +111,43 @@ export const procurementAPI = {
         body: JSON.stringify({ name, address, gst }),
         headers: getAuthHeaders(tenantId)
     }),
-    getPurchaseOrders: (tenantId) => apiCall('/procurement/orders', { headers: getAuthHeaders(tenantId) }),
-    createPurchaseOrder: (supplierId, amount, tenantId) => apiCall('/procurement/orders', {
+    getPurchaseOrders: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/procurement/orders?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
+    getPurchaseOrderById: (id, tenantId) => apiCall(`/procurement/orders/${id}`, { headers: getAuthHeaders(tenantId) }),
+    createPurchaseOrder: (poData, tenantId) => apiCall('/procurement/orders', {
         method: 'POST',
-        body: JSON.stringify({ supplier_id: supplierId, amount }),
+        body: JSON.stringify(poData),
+        headers: getAuthHeaders(tenantId)
+    }),
+    updatePurchaseOrder: (id, poData, tenantId) => apiCall(`/procurement/orders/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(poData),
+        headers: getAuthHeaders(tenantId)
+    }),
+    deletePurchaseOrder: (id, tenantId) => apiCall(`/procurement/orders/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(tenantId)
+    }),
+    generateOrder: (params, tenantId) => apiCall('/procurement/generate', {
+        method: 'POST',
+        body: JSON.stringify(params),
         headers: getAuthHeaders(tenantId)
     }),
     transferStock: (fromId, toId, medId, qty, tenantId) => apiCall(`/stock/transfer?from_id=${fromId}&to_id=${toId}&med_id=${medId}&qty=${qty}`, {
         method: 'POST',
         headers: getAuthHeaders(tenantId)
-    })
+    }),
+    createGRN: (data, tenantId) => apiCall(`/procurement/grn`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    getGRNs: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/procurement/grn?${query}`, { headers: getAuthHeaders(tenantId) });
+    }
 };
 
 // Sales API

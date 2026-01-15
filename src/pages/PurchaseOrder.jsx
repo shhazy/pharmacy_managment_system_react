@@ -31,6 +31,7 @@ const PurchaseOrder = ({ tenantId }) => {
     const [suppliers, setSuppliers] = useState([]);
     const [manufacturers, setManufacturers] = useState({});
     const [loading, setLoading] = useState(false);
+    const [conversionUnits, setConversionUnits] = useState([]);
     const [activeTab, setActiveTab] = useState('Purchase Order'); // Purchase Order, Records
     const [editingPoId, setEditingPoId] = useState(null);
 
@@ -71,6 +72,14 @@ const PurchaseOrder = ({ tenantId }) => {
             } catch (err) {
                 console.error("Error fetching manufacturers", err);
             }
+
+            // Fetch Conversion Units
+            try {
+                const units = await inventoryCRUDAPI.list('purchase-conversion-units', tenantId);
+                setConversionUnits(Array.isArray(units) ? units : []);
+            } catch (err) {
+                console.error("Error fetching conversion units", err);
+            }
         };
         fetchInitialData();
     }, [tenantId]);
@@ -106,7 +115,7 @@ const PurchaseOrder = ({ tenantId }) => {
             const supplierProducts = inventory
                 .filter(p => !supId || p.supplier_id === parseInt(supId))
                 .map(p => {
-                    const shopInv = p.batches?.reduce((sum, b) => sum + (b.current_stock || 0), 0) || 0;
+                    const shopInv = (p.stock_inventory || p.batches || []).reduce((sum, b) => sum + (b.quantity || b.current_stock || 0), 0) || 0;
                     return {
                         id: p.id,
                         code: p.product_code || `P-${p.id}`,
@@ -118,6 +127,10 @@ const PurchaseOrder = ({ tenantId }) => {
                         disc: p.max_discount || 0,
                         invLevel: p.min_inventory_level || p.reorder_level || 0,
                         shopInv: shopInv,
+                        purchase_conv_unit_id: p.purchase_conv_unit_id,
+                        purchase_conv_factor: p.purchase_conv_factor || 1,
+                        selected_unit_type: p.purchase_conv_unit_id ? 'bulk' : 'base',
+                        factor: p.purchase_conv_unit_id ? (p.purchase_conv_factor || 1) : 1,
                         tempPOQty: 0,
                         orderQty: 0,
                         rPrice: p.retail_price || 0
@@ -156,7 +169,13 @@ const PurchaseOrder = ({ tenantId }) => {
 
             setProducts(prev => prev.map(p => {
                 const sug = suggestions.find(s => s.product_id === p.id);
-                return { ...p, orderQty: sug ? sug.suggested_qty : 0 };
+                const suggestedQty = sug ? sug.suggested_qty : 0;
+                return {
+                    ...p,
+                    orderQty: suggestedQty,
+                    selected_unit_type: p.purchase_conv_unit_id ? 'bulk' : 'base',
+                    factor: p.purchase_conv_unit_id ? (p.purchase_conv_factor || 1) : 1
+                };
             }));
         } catch (err) {
             console.error("Error generating order", err);
@@ -187,13 +206,18 @@ const PurchaseOrder = ({ tenantId }) => {
                 total_amount: parseFloat(netTotal),
                 notes: "",
                 status: status, // "Pending" or "Finalized"
-                items: orderedItems.map(p => ({
-                    product_id: p.id,
-                    quantity: parseInt(p.orderQty),
-                    unit_cost: parseFloat(p.cost),
-                    discount_percent: parseFloat(p.disc),
-                    total_cost: parseFloat(p.cost * p.orderQty * (1 - p.disc / 100))
-                }))
+                items: orderedItems.map(p => {
+                    const totalQty = parseInt(p.orderQty) * (p.factor || 1);
+                    return {
+                        product_id: p.id,
+                        quantity: totalQty,
+                        unit_cost: parseFloat(p.cost),
+                        discount_percent: parseFloat(p.disc),
+                        total_cost: parseFloat(p.cost * totalQty * (1 - p.disc / 100)),
+                        purchase_conversion_unit_id: p.selected_unit_type === 'bulk' ? p.purchase_conv_unit_id : null,
+                        factor: p.factor || 1
+                    };
+                })
             };
 
             if (editingPoId) {
@@ -246,7 +270,15 @@ const PurchaseOrder = ({ tenantId }) => {
             // Map the quantities from the saved items using the fresh list
             setProducts(supplierProducts.map(p => {
                 const poItem = fullPo.items.find(item => item.product_id === p.id);
-                return { ...p, orderQty: poItem ? poItem.quantity : 0 };
+                if (!poItem) return p;
+
+                const factor = poItem.factor || 1;
+                return {
+                    ...p,
+                    orderQty: poItem.quantity / factor,
+                    factor: factor,
+                    selected_unit_type: poItem.purchase_conversion_unit_id ? 'bulk' : 'base'
+                };
             }));
 
             setActiveTab('Purchase Order');
@@ -276,9 +308,21 @@ const PurchaseOrder = ({ tenantId }) => {
         setProducts(prev => prev.map(p => p.code === code ? { ...p, orderQty: parseInt(qty) || 0 } : p));
     };
 
+    const updateUnit = (code, type) => {
+        setProducts(prev => prev.map(p => {
+            if (p.code !== code) return p;
+            return {
+                ...p,
+                selected_unit_type: type,
+                factor: type === 'base' ? 1 : (p.purchase_conv_factor || 1)
+            };
+        }));
+    };
+
     const totalQty = products.reduce((sum, p) => sum + p.orderQty, 0);
-    const subTotal = products.reduce((sum, p) => sum + (p.orderQty * p.cost), 0);
-    const totalDiscount = products.reduce((sum, p) => sum + (p.cost * p.orderQty * (p.disc / 100)), 0);
+    const totalUnits = products.reduce((sum, p) => sum + (p.orderQty * (p.factor || 1)), 0);
+    const subTotal = products.reduce((sum, p) => sum + (p.orderQty * (p.factor || 1) * p.cost), 0);
+    const totalDiscount = products.reduce((sum, p) => sum + ((p.orderQty * (p.factor || 1) * p.cost) * (p.disc / 100)), 0);
     const netTotal = subTotal - totalDiscount;
 
     // --- RECORD FILTERING ---
@@ -472,7 +516,8 @@ const PurchaseOrder = ({ tenantId }) => {
                                         <th style={{ width: '80px', fontSize: '0.75rem' }}>Inv Level</th>
                                         <th style={{ width: '80px', fontSize: '0.75rem' }}>Shop Inv</th>
                                         <th style={{ width: '100px', fontSize: '0.75rem', color: 'var(--accent)' }}>Temp PO Qty</th>
-                                        <th style={{ width: '110px', background: 'rgba(99, 102, 241, 0.1)', fontSize: '0.75rem' }}>Order Qty</th>
+                                        <th style={{ width: '100px', background: 'rgba(99, 102, 241, 0.1)', fontSize: '0.75rem' }}>Order Qty</th>
+                                        <th style={{ width: '100px', fontSize: '0.75rem', color: 'var(--accent)' }}>Total Units</th>
                                         <th style={{ width: '90px', fontSize: '0.75rem' }}>R Price</th>
                                     </tr>
                                 </thead>
@@ -489,7 +534,21 @@ const PurchaseOrder = ({ tenantId }) => {
                                                 <tr key={p.code} style={{ transition: 'background 0.2s' }}>
                                                     <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.code}</td>
                                                     <td style={{ fontWeight: '500', fontSize: '0.85rem', padding: '10px 16px' }}>{p.name}</td>
-                                                    <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.unit}</td>
+                                                    <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>
+                                                        <select
+                                                            className="input-field"
+                                                            style={{ padding: '2px 4px', fontSize: '0.8rem' }}
+                                                            value={p.selected_unit_type}
+                                                            onChange={(e) => updateUnit(p.code, e.target.value)}
+                                                        >
+                                                            <option value="base">Unit</option>
+                                                            {p.purchase_conv_unit_id && (
+                                                                <option value="bulk">
+                                                                    {conversionUnits.find(u => u.id === p.purchase_conv_unit_id)?.name || 'Bulk'}
+                                                                </option>
+                                                            )}
+                                                        </select>
+                                                    </td>
                                                     <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.factor}</td>
                                                     <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.cost.toFixed(2)}</td>
                                                     <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.disc.toFixed(2)}</td>
@@ -504,6 +563,9 @@ const PurchaseOrder = ({ tenantId }) => {
                                                             value={p.orderQty}
                                                             onChange={e => updateQty(p.code, e.target.value)}
                                                         />
+                                                    </td>
+                                                    <td style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--accent)', padding: '10px 16px' }}>
+                                                        {p.orderQty * (p.factor || 1)}
                                                     </td>
                                                     <td style={{ fontSize: '0.8rem', padding: '10px 16px' }}>{p.rPrice.toFixed(2)}</td>
                                                 </tr>
@@ -531,8 +593,12 @@ const PurchaseOrder = ({ tenantId }) => {
                                 <span style={{ marginLeft: '8px', fontWeight: '700', fontSize: '1rem' }}>{products.length}</span>
                             </div>
                             <div>
-                                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Quantity:</span>
+                                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Packs:</span>
                                 <span style={{ marginLeft: '8px', fontWeight: '700', fontSize: '1rem' }}>{totalQty}</span>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Total Units:</span>
+                                <span style={{ marginLeft: '8px', fontWeight: '700', fontSize: '1rem' }}>{totalUnits}</span>
                             </div>
                             <div>
                                 <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>Estimate (Net):</span>

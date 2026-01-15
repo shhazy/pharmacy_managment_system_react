@@ -342,12 +342,12 @@ const DashboardOverview = ({ tenantId }) => {
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {expiryAlerts.map(b => (
-                                <div key={b.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                                <div key={b.inventory_id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                         <span style={{ fontWeight: '600' }}>#{b.batch_number}</span>
                                         <span style={{ color: '#ef4444', fontSize: '0.8rem' }}>{new Date(b.expiry_date).toLocaleDateString()}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Qty: {b.current_stock} units</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Qty: {b.quantity} units</div>
                                 </div>
                             ))}
                         </div>
@@ -851,9 +851,9 @@ const InventoryManager = ({ tenantId }) => {
 
     useEffect(() => { fetchData(); }, []);
 
-    const filtered = medicines.filter(m =>
-        m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.generic_name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filtered = (Array.isArray(medicines) ? medicines : []).filter(m =>
+        (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (showForm) return <ProductDefinition tenantId={tenantId} onBack={() => { setShowForm(false); fetchData(); }} onSuccess={() => { setShowForm(false); fetchData(); }} />;
@@ -901,7 +901,7 @@ const InventoryManager = ({ tenantId }) => {
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan="5" style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}>No matches found.</td></tr>
                         ) : filtered.map(m => {
-                            const totalStock = m.batches.reduce((acc, b) => acc + b.current_stock, 0);
+                            const totalStock = (m.stock_inventory || m.batches || []).reduce((acc, b) => acc + (b.quantity || b.current_stock || 0), 0);
                             const healthColor = totalStock <= m.reorder_level ? '#ef4444' : totalStock < (m.reorder_level * 2) ? '#f59e0b' : '#10b981';
 
                             return (
@@ -924,9 +924,9 @@ const InventoryManager = ({ tenantId }) => {
                                     </td>
                                     <td style={{ padding: '20px' }}>
                                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                            {m.batches.map(b => (
-                                                <span key={b.id} style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                                                    {b.batch_number} ({b.current_stock})
+                                            {(m.stock_inventory || m.batches || []).map(b => (
+                                                <span key={b.inventory_id || b.id} style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                                                    {b.batch_number} ({b.quantity || b.current_stock || 0})
                                                 </span>
                                             ))}
                                         </div>
@@ -961,18 +961,18 @@ const POSManager = ({ tenantId }) => {
     }, []);
 
     const addToCart = (med, batch) => {
-        const existing = cart.find(c => c.batch_id === batch.id);
+        const existing = cart.find(c => c.batch_id === (batch.inventory_id || batch.id));
         if (existing) {
-            if (existing.quantity >= batch.current_stock) { alert("Max stock reached"); return; }
-            setCart(cart.map(c => c.batch_id === batch.id ? { ...c, quantity: c.quantity + 1 } : c));
+            if (existing.quantity >= (batch.quantity || batch.current_stock)) { alert("Max stock reached"); return; }
+            setCart(cart.map(c => c.batch_id === (batch.inventory_id || batch.id) ? { ...c, quantity: c.quantity + 1 } : c));
         } else {
             setCart([...cart, {
                 medicine_id: med.id,
                 name: med.name,
-                batch_id: batch.id,
+                batch_id: batch.inventory_id || batch.id,
                 batch_no: batch.batch_number,
                 quantity: 1,
-                unit_price: batch.sale_price,
+                unit_price: batch.selling_price || batch.sale_price,
                 tax_percent: 0,
                 discount_percent: 0
             }]);
@@ -1020,9 +1020,9 @@ const POSManager = ({ tenantId }) => {
         finally { setProcessing(false); }
     };
 
-    const searchFiltered = medicines.filter(m =>
-        m.name.toLowerCase().includes(search.toLowerCase()) ||
-        m.generic_name.toLowerCase().includes(search.toLowerCase())
+    const searchFiltered = (Array.isArray(medicines) ? medicines : []).filter(m =>
+        (m.name && m.name.toLowerCase().includes(search.toLowerCase())) ||
+        (m.generic_name && m.generic_name.toLowerCase().includes(search.toLowerCase()))
     ).slice(0, 8);
 
     return (
@@ -1045,9 +1045,9 @@ const POSManager = ({ tenantId }) => {
                             No exact matches. Try searching by generic name.
                         </div>
                     )}
-                    {searchFiltered.map(m => m.batches.filter(b => b.current_stock > 0).map(b => (
+                    {searchFiltered.map(m => (m.stock_inventory || []).filter(b => b.quantity > 0).map(b => (
                         <div
-                            key={b.id}
+                            key={b.inventory_id}
                             className="glass-card"
                             onClick={() => addToCart(m, b)}
                             style={{ cursor: 'pointer', border: '1px solid transparent', transition: '0.2s', position: 'relative', overflow: 'hidden' }}
@@ -1056,16 +1056,16 @@ const POSManager = ({ tenantId }) => {
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                                 <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Batch: {b.batch_number}</span>
-                                <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 'bold' }}>{b.current_stock} available</span>
+                                <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 'bold' }}>{b.quantity} available</span>
                             </div>
                             <div style={{ fontWeight: '600', marginBottom: '4px' }}>{m.name}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>{m.generic_name}</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '1.2rem' }}>${b.sale_price}</div>
+                                <div style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '1.2rem' }}>${b.selling_price}</div>
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setSearch(m.generic_name);
+                                        setSearch(m.generic_name || m.product_name);
                                     }}
                                     title="Find Alternates (Same Generic)"
                                     style={{ background: 'rgba(99, 102, 241, 0.1)', border: 'none', color: 'var(--primary)', borderRadius: '4px', padding: '4px', cursor: 'pointer' }}

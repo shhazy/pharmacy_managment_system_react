@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Printer, Plus, Trash2, Search, ArrowLeft, Download, Upload } from 'lucide-react';
-import { procurementAPI, inventoryAPI, medicineAPI } from '../services/api';
+import { procurementAPI, inventoryAPI, medicineAPI, inventoryCRUDAPI } from '../services/api';
 
 const GRN = ({ tenantId }) => {
     const [activeTab, setActiveTab] = useState('GRN'); // GRN or Records
@@ -30,6 +30,7 @@ const GRN = ({ tenantId }) => {
     });
 
     const [items, setItems] = useState([]);
+    const [conversionUnits, setConversionUnits] = useState([]);
 
     const [financials, setFinancials] = useState({
         invoiceAmount: 0,
@@ -65,22 +66,26 @@ const GRN = ({ tenantId }) => {
             return;
         }
 
+        const factor = 1;
         const newItem = {
             id: Date.now(),
             productId: prod.id,
             code: prod.product_code || 'N/A',
             name: prod.product_name,
             unit: prod.uom || 'Unit',
-            retailPrice: prod.retail_price || 0, // Assuming product model has retail_price
-            unitCost: prod.average_cost || 0, // Mapped from backend average_cost
-            packSize: prod.pack_size || 1,
+            selected_unit_type: 'base',
+            purchase_conv_unit_id: prod.purchase_conv_unit_id,
+            purchase_conv_factor: prod.purchase_conv_factor || 1,
+            factor: 1,
+            retailPrice: prod.retail_price || 0,
+            unitCost: prod.average_cost || 0,
             totalAmount: 0,
             quantity: 1,
             batchNo: '',
             expiryDate: ''
         };
 
-        // Recalc total for default qty 1
+        // Recalc total
         newItem.totalAmount = newItem.unitCost * newItem.quantity;
 
         setItems(prev => [...prev, newItem]);
@@ -88,16 +93,35 @@ const GRN = ({ tenantId }) => {
 
     // --- Initial Load ---
     useEffect(() => {
-        const loadSuppliers = async () => {
+        const loadInitialData = async () => {
             try {
-                const data = await procurementAPI.getSuppliers(tenantId);
-                setSuppliers(data);
+                const [supData, unitData] = await Promise.all([
+                    procurementAPI.getSuppliers(tenantId),
+                    inventoryCRUDAPI.list('purchase-conversion-units', tenantId)
+                ]);
+                setSuppliers(supData);
+                setConversionUnits(unitData);
             } catch (err) {
-                console.error("Failed to load suppliers", err);
+                console.error("Failed to load initial data", err);
             }
         };
-        loadSuppliers();
+        loadInitialData();
     }, [tenantId]);
+
+    const updateUnit = (id, type) => {
+        setItems(prev => prev.map(p => {
+            if (p.id === id) {
+                const newFactor = type === 'bulk' ? (p.purchase_conv_factor || 1) : 1;
+                return {
+                    ...p,
+                    selected_unit_type: type,
+                    factor: newFactor,
+                    totalAmount: parseFloat(p.unitCost || 0) * (parseFloat(p.quantity || 0) * newFactor)
+                };
+            }
+            return p;
+        }));
+    };
 
     // --- Handlers ---
     const handleSupplierChange = async (supplierId) => {
@@ -131,35 +155,32 @@ const GRN = ({ tenantId }) => {
             const po = await procurementAPI.getPurchaseOrderById(poId, tenantId);
             if (po) {
                 // Map PO Items to GRN Items
-                const loadedItems = po.items.map((pi, index) => ({
-                    id: Date.now() + index, // Temp ID
-                    productId: pi.product_id,
-                    code: pi.product?.product_code || 'N/A', // Need backend to include product details in PO Item response or fetch separately
-                    name: pi.product?.name || `Product ${pi.product_id} `, // Placeholder if name missing, ideally PO includes product details
-                    unit: pi.product?.unit || 'N/A', // Assuming product has a unit
-                    retailPrice: pi.product?.retail_price || 0, // Need from product
-                    unitCost: pi.unit_cost,
-                    packSize: pi.product?.pack_size || 1, // Assuming product has pack size
-                    totalAmount: pi.total_cost,
-                    quantity: pi.quantity,
-                    batchNo: '',
-                    expiryDate: ''
-                }));
+                const loadedItems = po.items.map((pi, index) => {
+                    const factor = pi.factor || 1;
+                    const selectedType = pi.purchase_conversion_unit_id ? 'bulk' : 'base';
+                    const displayQty = pi.quantity / factor;
 
-                // Enhance items with product details (if not in PO response, might need separate fetch)
-                // For now assuming basic mapping.
-                // NOTE: The previous PO response might not have nested Product object. 
-                // We might need to fetch product info for names/codes if PO doesn't have it.
-                // Let's assume for now we might need to fetch product list or PO includes it.
-                // Checking procurement_routes.py: creates `db.query(PurchaseOrder).options(joinedload(PurchaseOrder.items))`
-                // Check PurchaseOrderItem model: `product = relationship("Product")`
-                // Does `joinedload(PurchaseOrder.items)` load the product inside the item? 
-                // Default SQLAlchemy behavior for nested rels usually needs explicit join or lazy load. 
-                // `PurchaseOrderItem` has `product` relationship. We might need `joinedload(PurchaseOrder.items).joinedload(PurchaseOrderItem.product)` in backend to be efficient, 
-                // OR relying on lazy loading if serialization handles it (FastAPI + Pydantic usually needs explicit config).
+                    return {
+                        id: Date.now() + index,
+                        productId: pi.product_id,
+                        code: pi.product?.product_code || 'N/A',
+                        name: pi.product?.product_name || `Product ${pi.product_id}`,
+                        unit: pi.product?.uom || 'N/A',
+                        selected_unit_type: selectedType,
+                        purchase_conv_unit_id: pi.product?.purchase_conv_unit_id,
+                        purchase_conv_factor: pi.product?.purchase_conv_factor || 1,
+                        factor: factor,
+                        retailPrice: pi.product?.retail_price || 0,
+                        unitCost: pi.unit_cost,
+                        totalAmount: pi.total_cost,
+                        quantity: displayQty,
+                        batchNo: '',
+                        expiryDate: ''
+                    };
+                });
 
                 setItems(loadedItems);
-                setHeader(prev => ({ ...prev, comments: `Loaded from PO #${po.po_no} ` }));
+                setHeader(prev => ({ ...prev, comments: `Loaded from PO #${po.po_no}` }));
                 setSelectedPO(poId);
             }
         } catch (err) {
@@ -248,14 +269,9 @@ const GRN = ({ tenantId }) => {
         setItems(prev => prev.map(item => {
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
-                if (field === 'quantity' || field === 'unitCost') {
-                    // Recalculate Total: Unit Cost * Qty (or specific logic)
-                    // Note: In pharma, packs vs units is key. Assuming Unit Cost is per unit here for simplicity or pack cost.
-                    // Screenshot shows: Cost 541.20, Qty 150... Total 2706. 
-                    // 2706 / 150 = 18.04. 541.20 / 5 (pack size?) = 108.
-                    // Let's assume input implies user entering cost/pack or total.
-                    // For now, simple calc: Unit Cost * Qty
-                    updated.totalAmount = parseFloat(updated.unitCost || 0) * parseFloat(updated.quantity || 0);
+                if (field === 'quantity' || field === 'unitCost' || field === 'factor') {
+                    // Total Amount = Cost (per base unit) * Selection Qty * Factor
+                    updated.totalAmount = parseFloat(updated.unitCost || 0) * (parseFloat(updated.quantity || 0) * (updated.factor || 1));
                 }
                 return updated;
             }
@@ -291,12 +307,14 @@ const GRN = ({ tenantId }) => {
                 items: items.map(item => ({
                     product_id: item.productId,
                     batch_no: item.batchNo || 'DEFAULT',
-                    expiry_date: item.expiryDate ? new Date(item.expiryDate).toISOString() : new Date().toISOString(), // Fallback
-                    pack_size: item.packSize,
-                    quantity: parseInt(item.quantity) || 0,
+                    expiry_date: item.expiryDate ? new Date(item.expiryDate).toISOString() : new Date().toISOString(),
+                    pack_size: 1, // Defaulting to 1 as we use factor now
+                    quantity: parseInt(item.quantity * item.factor) || 0,
                     unit_cost: parseFloat(item.unitCost) || 0,
                     total_cost: parseFloat(item.totalAmount) || 0,
-                    retail_price: parseFloat(item.retailPrice) || 0
+                    retail_price: parseFloat(item.retailPrice) || 0,
+                    purchase_conversion_unit_id: item.selected_unit_type === 'bulk' ? item.purchase_conv_unit_id : null,
+                    factor: item.factor
                 }))
             };
 
@@ -549,12 +567,13 @@ const GRN = ({ tenantId }) => {
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '40px' }}>#</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '100px' }}>Code</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '200px' }}>Product Name</th>
-                                        <th style={{ padding: '10px', textAlign: 'left', minWidth: '60px' }}>Unit</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', minWidth: '100px' }}>Unit Selection</th>
                                         <th style={{ padding: '10px', textAlign: 'right', minWidth: '80px' }}>R.Price</th>
                                         <th style={{ padding: '10px', textAlign: 'right', minWidth: '80px' }}>Cost</th>
-                                        <th style={{ padding: '10px', textAlign: 'center', minWidth: '60px' }}>Pack</th>
+                                        <th style={{ padding: '10px', textAlign: 'center', minWidth: '60px' }}>Factor</th>
                                         <th style={{ padding: '10px', textAlign: 'right', minWidth: '100px' }}>Total Amt</th>
-                                        <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px', background: '#fffbeb', color: '#000', fontWeight: 'bold' }}>Qty</th>
+                                        <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px', background: '#fffbeb', color: '#000', fontWeight: 'bold' }}>Order Qty</th>
+                                        <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px' }}>Total Units</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '120px' }}>Batch No</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '120px' }}>Expiry</th>
                                         <th style={{ padding: '10px', textAlign: 'center', minWidth: '50px' }}>Act</th>
@@ -566,8 +585,32 @@ const GRN = ({ tenantId }) => {
                                             <td style={{ padding: '8px', textAlign: 'center' }}>{index + 1}</td>
                                             <td style={{ padding: '8px' }}>{item.code}</td>
                                             <td style={{ padding: '8px' }}>{item.name}</td>
-                                            <td style={{ padding: '8px' }}>{item.unit}</td>
-                                            <td style={{ padding: '8px', textAlign: 'right' }}>{item.retailPrice}</td>
+                                            <td style={{ padding: '8px' }}>
+                                                <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                                                    <button
+                                                        onClick={() => updateUnit(item.id, 'base')}
+                                                        style={{ flex: 1, padding: '4px', border: 'none', background: item.selected_unit_type === 'base' ? 'var(--primary)' : 'transparent', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                    >
+                                                        {item.unit}
+                                                    </button>
+                                                    {item.purchase_conv_unit_id && (
+                                                        <button
+                                                            onClick={() => updateUnit(item.id, 'bulk')}
+                                                            style={{ flex: 1, padding: '4px', border: 'none', background: item.selected_unit_type === 'bulk' ? 'var(--primary)' : 'transparent', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}
+                                                        >
+                                                            {conversionUnits.find(u => u.id === item.purchase_conv_unit_id)?.name || 'Bulk'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '8px', textAlign: 'right' }}>
+                                                <input
+                                                    type="number"
+                                                    style={{ ...InputParams.style, textAlign: 'right', padding: '2px 4px' }}
+                                                    value={item.retailPrice}
+                                                    onChange={(e) => handleItemChange(item.id, 'retailPrice', e.target.value)}
+                                                />
+                                            </td>
                                             <td style={{ padding: '8px' }}>
                                                 <input
                                                     type="number"
@@ -576,7 +619,7 @@ const GRN = ({ tenantId }) => {
                                                     onChange={(e) => handleItemChange(item.id, 'unitCost', e.target.value)}
                                                 />
                                             </td>
-                                            <td style={{ padding: '8px', textAlign: 'center' }}>{item.packSize}</td>
+                                            <td style={{ padding: '8px', textAlign: 'center' }}>{item.factor}</td>
                                             <td style={{ padding: '8px', textAlign: 'right' }}>{item.totalAmount.toFixed(2)}</td>
                                             <td style={{ padding: '8px', background: '#fffbeb' }}>
                                                 <input
@@ -585,6 +628,9 @@ const GRN = ({ tenantId }) => {
                                                     value={item.quantity}
                                                     onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
                                                 />
+                                            </td>
+                                            <td style={{ padding: '8px', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold' }}>
+                                                {item.quantity * item.factor}
                                             </td>
                                             <td style={{ padding: '8px' }}>
                                                 <input

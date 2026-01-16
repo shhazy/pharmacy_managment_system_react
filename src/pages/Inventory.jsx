@@ -97,7 +97,7 @@ const Inventory = ({ tenant }) => {
                                             {med.stock_quantity} units
                                         </span>
                                     </td>
-                                    <td style={{ padding: '20px' }}>${med.price}</td>
+                                    <td style={{ padding: '20px' }}>PKR {med.price}</td>
                                     <td style={{ padding: '20px', color: 'var(--text-secondary)' }}>
                                         {med.expiry_date ? new Date(med.expiry_date).toLocaleDateString() : 'N/A'}
                                     </td>

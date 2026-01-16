@@ -673,7 +673,7 @@ const GRN = ({ tenantId }) => {
                             </div>
                             <div style={{ display: 'flex', gap: '20px' }}>
                                 <span style={{ fontSize: '0.9rem' }}>Total Qty: <b style={{ color: '#fffbeb', background: '#d97706', padding: '2px 8px', borderRadius: '4px' }}>{items.reduce((s, i) => s + parseFloat(i.quantity || 0), 0)}</b></span>
-                                <span style={{ fontSize: '0.9rem' }}>Gross Total: <b style={{ color: '#fffbeb', background: '#d97706', padding: '2px 8px', borderRadius: '4px' }}>{items.reduce((s, i) => s + i.totalAmount, 0).toFixed(2)}</b></span>
+                                <span style={{ fontSize: '0.9rem' }}>Gross Total: <b style={{ color: '#fffbeb', background: '#d97706', padding: '2px 8px', borderRadius: '4px' }}>PKR {items.reduce((s, i) => s + i.totalAmount, 0).toFixed(2)}</b></span>
                             </div>
                         </div>
                     </div>
@@ -755,8 +755,8 @@ const GRN = ({ tenantId }) => {
                                             <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>{new Date(r.created_at).toLocaleDateString()}</td>
                                             <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>{suppliers.find(s => s.id === r.supplier_id)?.name || 'Unknown'}</td>
                                             <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>{r.invoice_no}</td>
-                                            <td style={{ padding: '12px 16px', fontSize: '0.85rem', textAlign: 'right' }}>{r.sub_total.toLocaleString()}</td>
-                                            <td style={{ padding: '12px 16px', fontSize: '0.85rem', textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>{r.net_total.toLocaleString()}</td>
+                                            <td style={{ padding: '12px 16px', fontSize: '0.85rem', textAlign: 'right' }}>PKR {r.sub_total.toLocaleString()}</td>
+                                            <td style={{ padding: '12px 16px', fontSize: '0.85rem', textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>PKR {r.net_total.toLocaleString()}</td>
                                             <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                                                 <button className="btn-icon" onClick={() => { }} title="View">
                                                     <Search size={16} />

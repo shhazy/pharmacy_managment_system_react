@@ -145,7 +145,7 @@ const ProductList = ({ tenantId, onEdit }) => {
                                 </td>
                                 <td style={{ padding: '16px' }}>
                                     <div style={{ color: 'var(--text-primary)', fontWeight: '700' }}>
-                                        ${product.retail_price?.toFixed(2) || '0.00'}
+                                        PKR {product.retail_price?.toFixed(2) || '0.00'}
                                     </div>
                                 </td>
                                 <td style={{ padding: '16px' }}>

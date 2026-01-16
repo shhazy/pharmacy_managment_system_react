@@ -1,4 +1,4 @@
-﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale } from 'lucide-react';
+﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ProductDefinition from './ProductDefinition';
@@ -7,6 +7,8 @@ import InventoryCRUDManager from './InventoryCRUDManager';
 import ProductList from './ProductList';
 import PurchaseOrder from './PurchaseOrder';
 import GRN from './GRN';
+import POS from './POS';
+import GeneralSettings from './GeneralSettings';
 import { API_BASE_URL } from '../services/api';
 
 const Dashboard = ({ tenant, isSuperAdmin }) => {
@@ -21,6 +23,16 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
     const [productToEdit, setProductToEdit] = useState(null);
 
     const [apiStatus, setApiStatus] = useState('Checking...');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(activeView !== 'POS');
+
+    useEffect(() => {
+        if (activeView === 'POS') {
+            setIsSidebarOpen(false);
+        } else {
+            // Optional: Auto-open for other views? 
+            // setIsSidebarOpen(true); 
+        }
+    }, [activeView]);
 
     useEffect(() => {
         const checkConn = async () => {
@@ -58,6 +70,26 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
         }
     }, [activeView, isSuperAdmin]); // Trigger on view change or SA status change
 
+    useEffect(() => {
+        // Fetch and apply theme settings
+        const fetchTheme = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/settings`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenant }
+                });
+                if (res.ok) {
+                    const settings = await res.json();
+                    if (settings.theme_config) {
+                        Object.keys(settings.theme_config).forEach(key => {
+                            document.documentElement.style.setProperty(key, settings.theme_config[key]);
+                        });
+                    }
+                }
+            } catch (e) { console.error("Failed to load theme"); }
+        };
+        if (tenant) fetchTheme();
+    }, [tenant]);
+
     const handleLogout = () => {
         localStorage.clear();
         window.location.href = '/login';
@@ -67,23 +99,42 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
         <div style={{ display: 'flex', minHeight: '100vh' }}>
             {/* Sidebar */}
             <div style={{
-                width: '280px',
+                width: isSidebarOpen ? '280px' : '0px',
                 background: 'var(--surface)',
-                borderRight: '1px solid var(--border)',
-                padding: '24px',
+                height: '100vh',
+                position: 'sticky',
+                top: 0,
+                background: 'var(--surface)',
+                borderRight: isSidebarOpen ? '1px solid var(--border)' : 'none',
+                padding: isSidebarOpen ? '24px' : '24px 0',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                transition: 'all 0.3s ease',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                zIndex: 50
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-                    <div style={{ padding: '8px', background: 'var(--primary)', borderRadius: '10px' }}>
-                        <LayoutGrid size={24} color="white" />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '40px', padding: '0 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ padding: '8px', background: 'var(--primary)', borderRadius: '10px' }}>
+                            <LayoutGrid size={24} color="white" />
+                        </div>
+                        <h2 style={{ fontSize: '1.2rem', opacity: isSidebarOpen ? 1 : 0 }}>
+                            {isSuperAdmin ? 'SuperAdmin' : (tenant ? `${tenant.charAt(0).toUpperCase() + tenant.slice(1)}` : 'Pharmacy')}
+                        </h2>
                     </div>
-                    <h2 style={{ fontSize: '1.2rem' }}>
-                        {isSuperAdmin ? 'SuperAdmin Panel' : (tenant ? `${tenant.charAt(0).toUpperCase() + tenant.slice(1)} Pharma` : 'Pharmacy Hub')}
-                    </h2>
+                    <button onClick={() => setIsSidebarOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <ChevronLeft size={20} />
+                    </button>
                 </div>
 
-                <nav style={{ flex: 1 }}>
+                <nav style={{ flex: 1, overflowY: isSidebarOpen ? 'auto' : 'hidden', overflowX: 'hidden' }} className="sidebar-nav">
+                    <style>{`
+                        .sidebar-nav::-webkit-scrollbar { width: 4px; }
+                        .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); borderRadius: 4px; }
+                        .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+                    `}</style>
                     <NavItem
                         icon={<LayoutGrid size={20} />}
                         label="Overview"
@@ -116,12 +167,20 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                 />
                             )}
                             {(userData.roles.includes('Admin') || userData.roles.includes('Manager') || userData.roles.includes('Cashier')) && (
-                                <NavItem
-                                    icon={<ShoppingCart size={20} />}
-                                    label="POS Terminal"
-                                    active={activeView === 'POS'}
-                                    onClick={() => setActiveView('POS')}
-                                />
+                                <>
+                                    <NavItem
+                                        icon={<ShoppingCart size={20} />}
+                                        label="POS Terminal"
+                                        active={activeView === 'POS'}
+                                        onClick={() => setActiveView('POS')}
+                                    />
+                                    <NavItem
+                                        icon={<FileText size={20} />}
+                                        label="Invoices"
+                                        active={activeView === 'Invoices'}
+                                        onClick={() => setActiveView('Invoices')}
+                                    />
+                                </>
                             )}
                             {(userData.roles.includes('Admin') || userData.roles.includes('Manager')) && (
                                 <>
@@ -163,6 +222,18 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     />
                                 </>
                             )}
+
+                            {(userData.roles.includes('Admin') || userData.roles.includes('Manager')) && (
+                                <NavDropdown
+                                    icon={<Settings size={20} />}
+                                    label="Settings"
+                                    activeView={activeView}
+                                    setActiveView={setActiveView}
+                                    items={[
+                                        { view: 'GeneralSettings', label: 'General Settings', icon: <Settings size={16} /> }
+                                    ]}
+                                />
+                            )}
                         </>
                     )}
                     <NavItem
@@ -185,10 +256,15 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
             </div>
 
             {/* Main Content */}
-            <main style={{ flex: 1, padding: '40px', background: 'radial-gradient(circle at top right, #1e293b, #0f172a)' }}>
+            <main style={{ flex: 1, padding: '40px', background: 'radial-gradient(circle at top right, #1e293b, #0f172a)', display: 'flex', flexDirection: 'column', minHeight: '100vh', width: isSidebarOpen ? 'calc(100% - 280px)' : '100%' }}>
                 <header style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {!isSidebarOpen && (
+                                <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'white', padding: '8px', borderRadius: '8px', cursor: 'pointer', marginRight: '10px', display: 'flex', alignItems: 'center' }}>
+                                    <Menu size={20} />
+                                </button>
+                            )}
                             <h1 style={{ fontSize: '2.5rem', margin: 0, background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                                 {isSuperAdmin ? 'Global System' :
                                     activeView === 'ProductDefinition' ? 'Product Definition' :
@@ -257,15 +333,23 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                                     activeView === 'Racks' ? <InventoryCRUDManager tenantId={tenant} entity="racks" entityName="Racks" /> :
                                                                         activeView === 'SuppliersInventory' ? <InventoryCRUDManager tenantId={tenant} entity="suppliers" entityName="Suppliers" /> :
                                                                             activeView === 'PurchaseConversionUnits' ? <InventoryCRUDManager tenantId={tenant} entity="purchase-conversion-units" entityName="Purchase Conversion Units" /> :
-                                                                                activeView === 'POS' ? <POSManager tenantId={tenant} /> :
-                                                                                    activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
-                                                                                        activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
-                                                                                            activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
-                                                                                                activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
-                                                                                                    activeView === 'GRN' ? <GRN tenantId={tenant} /> :
-                                                                                                        activeView === 'Reports' ? <AnalyticsDashboard tenantId={tenant} /> :
-                                                                                                            <DashboardOverview tenantId={tenant} />
+                                                                                activeView === 'PurchaseConversionUnits' ? <InventoryCRUDManager tenantId={tenant} entity="purchase-conversion-units" entityName="Purchase Conversion Units" /> :
+                                                                                    activeView === 'POS' ? <POS tenantId={tenant} /> :
+                                                                                        activeView === 'Invoices' ? <SalesHistory tenantId={tenant} /> :
+                                                                                            activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
+                                                                                                activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
+                                                                                                    activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
+                                                                                                        activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
+                                                                                                            activeView === 'GRN' ? <GRN tenantId={tenant} /> :
+                                                                                                                activeView === 'Reports' ? <AnalyticsDashboard tenantId={tenant} /> :
+                                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
+                                                                                                                        <DashboardOverview tenantId={tenant} />
                 )}
+
+                <footer style={{ marginTop: 'auto', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <div>&copy; {new Date().getFullYear()} {tenant ? tenant.toUpperCase() : 'ANTIGRAVITY'} PHARMA. All rights reserved.</div>
+                    <div>System v2.5.0 | Support: help@antigravity.dev</div>
+                </footer>
             </main>
         </div>
     );
@@ -291,7 +375,7 @@ const DashboardOverview = ({ tenantId }) => {
     }, []);
 
     const cards = [
-        { label: 'Daily Revenue', value: `$${stats.total_sales.toFixed(2)}`, icon: <TrendingUp color="#10b981" />, trend: `+${stats.invoice_count} bills` },
+        { label: 'Daily Revenue', value: `PKR ${stats.total_sales.toFixed(2)}`, icon: <TrendingUp color="#10b981" />, trend: `+${stats.invoice_count} bills` },
         { label: 'Low Stock Items', value: lowStock.length, icon: <AlertCircle color="#f59e0b" />, trend: 'Manual Restock' },
         { label: 'Expiry Alerts', value: expiryAlerts.length, icon: <AlertCircle color="#ef4444" />, trend: 'Next 90 Days' },
         { label: 'Active Staff', value: '4', icon: <Users color="#6366f1" />, trend: 'On Shift' },
@@ -669,6 +753,213 @@ const StaffForm = ({ tenantId, roles, existingUser, onSuccess, onCancel }) => {
     );
 }
 
+const SalesHistory = ({ tenantId }) => {
+    const [invoices, setInvoices] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [settings, setSettings] = useState({});
+    const [filters, setFilters] = useState({ start: '', end: '', status: 'All' });
+
+    useEffect(() => {
+        fetchInvoices();
+        fetchSettings();
+    }, [tenantId, filters]);
+
+    const fetchInvoices = async () => {
+        setLoading(true);
+        try {
+            const query = new URLSearchParams({
+                limit: 100,
+                start_date: filters.start,
+                end_date: filters.end,
+                status: filters.status
+            });
+            const res = await fetch(`${API_BASE_URL}/invoices?${query}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
+            });
+            if (res.ok) setInvoices(await res.json());
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    };
+
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/settings`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
+            });
+            if (res.ok) setSettings(await res.json());
+        } catch (e) { console.error(e); }
+    };
+
+    const printReceipt = (invoice) => {
+        if (!invoice) return;
+        const width = 72; // mm
+        const win = window.open('', '', 'width=400,height=600');
+        const content = `
+            <html>
+            <head>
+                <title>Receipt</title>
+                <style>
+                    body { font-family: 'Courier New', monospace; width: ${width}mm; margin: 0 auto; padding: 5px; font-size: 11px; color: black; }
+                    .center { text-align: center; }
+                    .right { text-align: right; }
+                    .bold { fontWeight: bold; }
+                    .header { margin-bottom: 5px; }
+                    .logo { max-width: 60%; max-height: 60px; margin-bottom: 5px; }
+                    .divider { border-top: 1px dashed black; margin: 5px 0; }
+                    .row { display: flex; justify-content: space-between; }
+                    .table-header { font-weight: bold; border-bottom: 1px dashed black; padding-bottom: 2px; margin-bottom: 5px; }
+                    .item-row { margin-bottom: 4px; }
+                    .item-name { font-weight: bold; font-size: 12px; }
+                    .item-details { font-size: 10px; display: flex; justify-content: space-between; padding-left: 10px; }
+                    .footer { margin-top: 5px; }
+                    .big-total { font-size: 16px; font-weight: bold; }
+                    @media print { body { width: ${width}mm; margin: 0 auto; } }
+                </style>
+            </head>
+            <body>
+                <div class="header center">
+                    ${settings.logo_url ? `<img src="${settings.logo_url}" class="logo" />` : ''}
+                    <div style="font-size: 18px; font-weight: bold;">${settings.name || 'PHARMACY'}</div>
+                    <div style="font-size: 10px;">${settings.tagline || ''}</div>
+                    <div>${settings.address || ''}</div>
+                    <div>Ph: ${settings.phone_no || ''} ${settings.license_no ? `Lic: ${settings.license_no}` : ''}</div>
+                </div>
+
+                <div class="divider"></div>
+                
+                <div class="row">
+                    <span>Inv #: ${invoice.invoice_number || '---'}</span>
+                    <span>POS No.: ${invoice.id || '---'}</span>
+                </div>
+                <div class="row">
+                    <span>Date: ${new Date(invoice.created_at).toLocaleString()}</span>
+                </div>
+                
+                <div class="divider"></div>
+
+                <div>
+                    <div class="table-header row">
+                        <span style="width: 5%">#</span>
+                        <span style="flex: 1">Description</span>
+                        <span style="width: 20%; text-align: right">Total</span>
+                    </div>
+                </div>
+
+                ${invoice.items.map((item, i) => `
+                    <div class="item-row">
+                        <div class="item-name">${i + 1}. ${item.product ? item.product.product_name : (item.name || 'Item')}</div>
+                        <div class="item-details">
+                            <span>
+                                ${item.unit_price} x ${item.quantity} 
+                            </span>
+                            <span>${(item.total_price || (item.unit_price * item.quantity)).toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('')}
+
+                <div class="divider"></div>
+
+                <div class="footer">
+                    <div class="row">
+                        <span>Total Qty: ${invoice.items.reduce((s, i) => s + i.quantity, 0)}</span>
+                        <span>Total Amount: ${invoice.net_total.toFixed(2)}</span>
+                    </div>
+                     <div class="row big-total" style="margin-top: 5px">
+                        <span>Payable:</span>
+                        <span>PKR ${invoice.net_total.toFixed(2)}</span>
+                    </div>
+                </div>
+                
+                <div class="center" style="margin-top: 20px; font-size: 10px;">
+                    Thank you for your visit!<br/>
+                    Computer Software developed by EIGLOU
+                </div>
+
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `;
+        win.document.write(content);
+        win.document.close();
+    };
+
+    return (
+        <div className="fade-in">
+            <div className="glass-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ margin: 0 }}>Sales Invoice History</h3>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <select
+                            className="input-field"
+                            style={{ width: '120px' }}
+                            value={filters.status}
+                            onChange={e => setFilters(p => ({ ...p, status: e.target.value }))}
+                        >
+                            <option value="All">All Status</option>
+                            <option value="Paid">Paid</option>
+                            <option value="Hold">Held Bills</option>
+                        </select>
+                        <input
+                            type="date" className="input-field" style={{ width: '130px' }}
+                            value={filters.start} onChange={e => setFilters(p => ({ ...p, start: e.target.value }))}
+                        />
+                        <span style={{ color: 'var(--text-secondary)' }}>to</span>
+                        <input
+                            type="date" className="input-field" style={{ width: '130px' }}
+                            value={filters.end} onChange={e => setFilters(p => ({ ...p, end: e.target.value }))}
+                        />
+                        {(filters.start || filters.end || filters.status !== 'All') && (
+                            <button onClick={() => setFilters({ start: '', end: '', status: 'All' })} style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer' }}>Clear</button>
+                        )}
+                    </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Invoice #</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Date & Time</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Items</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right' }}>Total Amount</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right' }}>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center' }}>Loading...</td></tr>
+                            ) : invoices.map(inv => (
+                                <tr key={inv.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '16px', fontWeight: 'bold' }}>
+                                        {inv.invoice_number}
+                                        {inv.status === 'Hold' && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#f59e0b', color: 'black', padding: '2px 6px', borderRadius: '4px' }}>HELD</span>}
+                                    </td>
+                                    <td style={{ padding: '16px', color: 'var(--text-secondary)' }}>
+                                        {new Date(inv.created_at).toLocaleString()}
+                                    </td>
+                                    <td style={{ padding: '16px' }}>{inv.items.length} items</td>
+                                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold' }}>
+                                        PKR {inv.net_total.toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: '16px', textAlign: 'right' }}>
+                                        <button
+                                            onClick={() => printReceipt(inv)}
+                                            style={{ background: 'transparent', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                        >
+                                            <Printer size={16} /> Print
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const TenantManager = () => {
     const [name, setName] = useState('');
     const [subdomain, setSubdomain] = useState('');
@@ -948,185 +1239,6 @@ const InventoryManager = ({ tenantId }) => {
 
 
 
-const POSManager = ({ tenantId }) => {
-    const [medicines, setMedicines] = useState([]);
-    const [cart, setCart] = useState([]);
-    const [search, setSearch] = useState('');
-    const [processing, setProcessing] = useState(false);
-
-    useEffect(() => {
-        fetch(`${API_BASE_URL}/inventory`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
-        }).then(r => r.json()).then(data => setMedicines(data));
-    }, []);
-
-    const addToCart = (med, batch) => {
-        const existing = cart.find(c => c.batch_id === (batch.inventory_id || batch.id));
-        if (existing) {
-            if (existing.quantity >= (batch.quantity || batch.current_stock)) { alert("Max stock reached"); return; }
-            setCart(cart.map(c => c.batch_id === (batch.inventory_id || batch.id) ? { ...c, quantity: c.quantity + 1 } : c));
-        } else {
-            setCart([...cart, {
-                medicine_id: med.id,
-                name: med.name,
-                batch_id: batch.inventory_id || batch.id,
-                batch_no: batch.batch_number,
-                quantity: 1,
-                unit_price: batch.selling_price || batch.sale_price,
-                tax_percent: 0,
-                discount_percent: 0
-            }]);
-        }
-    };
-
-    const removeFromCart = (batchId) => setCart(cart.filter(c => c.batch_id !== batchId));
-
-    const subtotal = cart.reduce((acc, c) => acc + (c.quantity * c.unit_price), 0);
-    const taxTotal = cart.reduce((acc, c) => acc + (c.quantity * c.unit_price * (c.tax_percent / 100)), 0);
-    const netTotal = subtotal + taxTotal;
-
-    const handleCheckout = async () => {
-        if (cart.length === 0) return;
-        setProcessing(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/invoices`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'X-Tenant-ID': tenantId
-                },
-                body: JSON.stringify({
-                    items: cart.map(c => ({
-                        medicine_id: c.medicine_id,
-                        batch_id: c.batch_id,
-                        quantity: c.quantity,
-                        unit_price: c.unit_price,
-                        tax_percent: c.tax_percent,
-                        discount_percent: c.discount_percent
-                    })),
-                    payment_method: 'Cash',
-                    discount_amount: 0
-                })
-            });
-            if (res.ok) {
-                alert("Invoice Generated Successfully!");
-                setCart([]);
-            } else {
-                const err = await res.json();
-                alert(err.detail);
-            }
-        } catch (e) { alert("Checkout failed"); }
-        finally { setProcessing(false); }
-    };
-
-    const searchFiltered = (Array.isArray(medicines) ? medicines : []).filter(m =>
-        (m.name && m.name.toLowerCase().includes(search.toLowerCase())) ||
-        (m.generic_name && m.generic_name.toLowerCase().includes(search.toLowerCase()))
-    ).slice(0, 8);
-
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', height: 'calc(100vh - 250px)' }}>
-            <div className="fade-in">
-                <div style={{ position: 'relative', marginBottom: '24px' }}>
-                    <Search style={{ position: 'absolute', left: '16px', top: '16px', color: 'var(--text-secondary)' }} />
-                    <input
-                        className="input-field"
-                        placeholder="Scan Barcode or Type Medicine Name..."
-                        style={{ padding: '16px 16px 16px 52px', fontSize: '1.1rem' }}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', overflowY: 'auto' }}>
-                    {searchFiltered.length === 0 && search && (
-                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                            No exact matches. Try searching by generic name.
-                        </div>
-                    )}
-                    {searchFiltered.map(m => (m.stock_inventory || []).filter(b => b.quantity > 0).map(b => (
-                        <div
-                            key={b.inventory_id}
-                            className="glass-card"
-                            onClick={() => addToCart(m, b)}
-                            style={{ cursor: 'pointer', border: '1px solid transparent', transition: '0.2s', position: 'relative', overflow: 'hidden' }}
-                            onMouseDown={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-                            onMouseUp={e => e.currentTarget.style.borderColor = 'transparent'}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Batch: {b.batch_number}</span>
-                                <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 'bold' }}>{b.quantity} available</span>
-                            </div>
-                            <div style={{ fontWeight: '600', marginBottom: '4px' }}>{m.name}</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>{m.generic_name}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '1.2rem' }}>${b.selling_price}</div>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSearch(m.generic_name || m.product_name);
-                                    }}
-                                    title="Find Alternates (Same Generic)"
-                                    style={{ background: 'rgba(99, 102, 241, 0.1)', border: 'none', color: 'var(--primary)', borderRadius: '4px', padding: '4px', cursor: 'pointer' }}
-                                >
-                                    <ListIcon size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    )))}
-                </div>
-            </div>
-
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '0' }}>
-                <div style={{ padding: '24px', borderBottom: '1px solid var(--border)' }}>
-                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <ShoppingCart size={20} /> Checkout Terminal
-                    </h3>
-                </div>
-
-                <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
-                    {cart.map(c => (
-                        <div key={c.batch_id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: '600' }}>{c.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Batch: {c.batch_no} | x{c.quantity}</div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: '600' }}>${(c.quantity * c.unit_price).toFixed(2)}</div>
-                                <button onClick={() => removeFromCart(c.batch_id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer' }}>Remove</button>
-                            </div>
-                        </div>
-                    ))}
-                    {cart.length === 0 && <div style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '40px' }}>Cart is empty</div>}
-                </div>
-
-                <div style={{ padding: '24px', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span>Subtotal</span>
-                        <span>${subtotal.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                        <span>Tax (VAT)</span>
-                        <span>${taxTotal.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', marginBottom: '24px' }}>
-                        <span style={{ fontSize: '1.2rem', fontWeight: '700' }}>Net Total</span>
-                        <span style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--primary)' }}>${netTotal.toFixed(2)}</span>
-                    </div>
-                    <button
-                        className="btn-primary"
-                        style={{ width: '100%', padding: '16px', fontSize: '1.1rem' }}
-                        disabled={cart.length === 0 || processing}
-                        onClick={handleCheckout}
-                    >
-                        {processing ? 'Processing...' : 'Complete Payment'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const StoreManager = ({ tenantId }) => {
     const [stores, setStores] = useState([]);
@@ -1283,7 +1395,7 @@ const SupplierManager = ({ tenantId }) => {
                             <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                 <td style={{ padding: '20px', fontWeight: '600' }}>{s.name}</td>
                                 <td style={{ padding: '20px' }}>{s.gst_number}</td>
-                                <td style={{ padding: '20px', color: '#10b981' }}>${s.ledger_balance?.toFixed(2) || '0.00'}</td>
+                                <td style={{ padding: '20px', color: '#10b981' }}>PKR {s.ledger_balance?.toFixed(2) || '0.00'}</td>
                                 <td style={{ padding: '20px', textAlign: 'right' }}>
                                     <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.75rem' }}>View Ledger</button>
                                 </td>
@@ -1304,7 +1416,7 @@ const SupplierManager = ({ tenantId }) => {
                             <tr key={o.id}>
                                 <td>#PO-{o.id + 1000}</td>
                                 <td>{new Date(o.created_at).toLocaleDateString()}</td>
-                                <td>${o.total_amount.toFixed(2)}</td>
+                                <td>PKR {o.total_amount.toFixed(2)}</td>
                                 <td><span className={`badge ${o.status === 'Received' ? 'badge-success' : 'badge-warning'}`}>{o.status}</span></td>
                             </tr>
                         ))}
@@ -1332,7 +1444,7 @@ const PatientManager = ({ tenantId }) => {
                         <div style={{ fontWeight: '600', fontSize: '1.1rem' }}>{p.name}</div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '4px' }}>{p.phone}</div>
                         <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.75rem', color: '#f59e0b' }}>Credit: ${p.outstanding_balance}</span>
+                            <span style={{ fontSize: '0.75rem', color: '#f59e0b' }}>Credit: PKR {p.outstanding_balance}</span>
                             <button className="btn-secondary" style={{ padding: '4px 10px', fontSize: '0.7rem' }}>View History</button>
                         </div>
                     </div>
@@ -1361,7 +1473,7 @@ const AnalyticsDashboard = ({ tenantId }) => {
                     {profitData.map((d, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                             <span>{d.medicine}</span>
-                            <span style={{ color: '#10b981', fontWeight: '700' }}>+${d.total_profit.toFixed(2)}</span>
+                            <span style={{ color: '#10b981', fontWeight: '700' }}>+PKR {d.total_profit.toFixed(2)}</span>
                         </div>
                     ))}
                 </div>

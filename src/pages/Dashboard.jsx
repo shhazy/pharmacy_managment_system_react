@@ -1,4 +1,4 @@
-﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer } from 'lucide-react';
+﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer, Banknote, CreditCard } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ProductDefinition from './ProductDefinition';
@@ -9,7 +9,11 @@ import PurchaseOrder from './PurchaseOrder';
 import GRN from './GRN';
 import POS from './POS';
 import GeneralSettings from './GeneralSettings';
+import Reports from './Reports';
+import Payments from './Payments';
+import Stock from './Stock';
 import { API_BASE_URL } from '../services/api';
+
 
 const Dashboard = ({ tenant, isSuperAdmin }) => {
     const navigate = useNavigate();
@@ -29,8 +33,8 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
         if (activeView === 'POS') {
             setIsSidebarOpen(false);
         } else {
-            // Optional: Auto-open for other views? 
-            // setIsSidebarOpen(true); 
+            // Optional: Auto-open for other views?
+            // setIsSidebarOpen(true);
         }
     }, [activeView]);
 
@@ -152,6 +156,7 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     items={[
                                         { view: 'ProductDefinition', label: 'Product Definition', icon: <Plus size={16} /> },
                                         { view: 'Products', label: 'Products', icon: <Package size={16} /> },
+                                        { view: 'Stock', label: 'Stock', icon: <Boxes size={16} /> },
                                         { view: 'LineItems', label: 'Line Items', icon: <ListIcon size={16} /> },
                                         { view: 'Categories', label: 'Categories', icon: <Tag size={16} /> },
                                         { view: 'SubCategories', label: 'Sub Categories', icon: <Layers size={16} /> },
@@ -217,8 +222,20 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     <NavItem
                                         icon={<TrendingUp size={20} />}
                                         label="Analytics Pro"
+                                        active={activeView === 'Analytics'}
+                                        onClick={() => setActiveView('Analytics')}
+                                    />
+                                    <NavItem
+                                        icon={<FileText size={20} />}
+                                        label="Reports"
                                         active={activeView === 'Reports'}
                                         onClick={() => setActiveView('Reports')}
+                                    />
+                                    <NavItem
+                                        icon={<CreditCard size={20} />}
+                                        label="Supplier Payments"
+                                        active={activeView === 'Payments'}
+                                        onClick={() => setActiveView('Payments')}
                                     />
                                 </>
                             )}
@@ -322,17 +339,17 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     setProductToEdit(p);
                                     navigate('/dashboard/ProductDefinition');
                                 }} /> :
-                                    activeView === 'LineItems' ? <InventoryCRUDManager tenantId={tenant} entity="line-items" entityName="Line Items" /> :
-                                        activeView === 'Categories' ? <InventoryCRUDManager tenantId={tenant} entity="categories" entityName="Categories" /> :
-                                            activeView === 'SubCategories' ? <InventoryCRUDManager tenantId={tenant} entity="sub-categories" entityName="Sub Categories" /> :
-                                                activeView === 'ProductGroups' ? <InventoryCRUDManager tenantId={tenant} entity="product-groups" entityName="Product Groups" /> :
-                                                    activeView === 'CategoryGroups' ? <InventoryCRUDManager tenantId={tenant} entity="category-groups" entityName="Category Groups" /> :
-                                                        activeView === 'Generics' ? <InventoryCRUDManager tenantId={tenant} entity="generics" entityName="Generics" /> :
-                                                            activeView === 'CalculateSeasons' ? <InventoryCRUDManager tenantId={tenant} entity="calculate-seasons" entityName="Calculate Seasons" /> :
-                                                                activeView === 'Manufacturers' ? <InventoryCRUDManager tenantId={tenant} entity="manufacturers" entityName="Manufacturers" /> :
-                                                                    activeView === 'Racks' ? <InventoryCRUDManager tenantId={tenant} entity="racks" entityName="Racks" /> :
-                                                                        activeView === 'SuppliersInventory' ? <InventoryCRUDManager tenantId={tenant} entity="suppliers" entityName="Suppliers" /> :
-                                                                            activeView === 'PurchaseConversionUnits' ? <InventoryCRUDManager tenantId={tenant} entity="purchase-conversion-units" entityName="Purchase Conversion Units" /> :
+                                    activeView === 'Stock' ? <Stock tenant={tenant} /> :
+                                        activeView === 'LineItems' ? <InventoryCRUDManager tenantId={tenant} entity="line-items" entityName="Line Items" /> :
+                                            activeView === 'Categories' ? <InventoryCRUDManager tenantId={tenant} entity="categories" entityName="Categories" /> :
+                                                activeView === 'SubCategories' ? <InventoryCRUDManager tenantId={tenant} entity="sub-categories" entityName="Sub Categories" /> :
+                                                    activeView === 'ProductGroups' ? <InventoryCRUDManager tenantId={tenant} entity="product-groups" entityName="Product Groups" /> :
+                                                        activeView === 'CategoryGroups' ? <InventoryCRUDManager tenantId={tenant} entity="category-groups" entityName="Category Groups" /> :
+                                                            activeView === 'Generics' ? <InventoryCRUDManager tenantId={tenant} entity="generics" entityName="Generics" /> :
+                                                                activeView === 'CalculateSeasons' ? <InventoryCRUDManager tenantId={tenant} entity="calculate-seasons" entityName="Calculate Seasons" /> :
+                                                                    activeView === 'Manufacturers' ? <InventoryCRUDManager tenantId={tenant} entity="manufacturers" entityName="Manufacturers" /> :
+                                                                        activeView === 'Racks' ? <InventoryCRUDManager tenantId={tenant} entity="racks" entityName="Racks" /> :
+                                                                            activeView === 'SuppliersInventory' ? <InventoryCRUDManager tenantId={tenant} entity="suppliers" entityName="Suppliers" /> :
                                                                                 activeView === 'PurchaseConversionUnits' ? <InventoryCRUDManager tenantId={tenant} entity="purchase-conversion-units" entityName="Purchase Conversion Units" /> :
                                                                                     activeView === 'POS' ? <POS tenantId={tenant} /> :
                                                                                         activeView === 'Invoices' ? <SalesHistory tenantId={tenant} /> :
@@ -341,9 +358,11 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                                                                     activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
                                                                                                         activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
                                                                                                             activeView === 'GRN' ? <GRN tenantId={tenant} /> :
-                                                                                                                activeView === 'Reports' ? <AnalyticsDashboard tenantId={tenant} /> :
-                                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
-                                                                                                                        <DashboardOverview tenantId={tenant} />
+                                                                                                                activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
+                                                                                                                    activeView === 'Reports' ? <Reports /> :
+                                                                                                                        activeView === 'Payments' ? <Payments tenantId={tenant} /> :
+                                                                                                                            activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
+                                                                                                                                <DashboardOverview tenantId={tenant} />
                 )}
 
                 <footer style={{ marginTop: 'auto', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
@@ -375,7 +394,7 @@ const DashboardOverview = ({ tenantId }) => {
     }, []);
 
     const cards = [
-        { label: 'Daily Revenue', value: `PKR ${stats.total_sales.toFixed(2)}`, icon: <TrendingUp color="#10b981" />, trend: `+${stats.invoice_count} bills` },
+        { label: 'Daily Revenue', value: `Rs. ${stats.total_sales.toFixed(2)}`, icon: <TrendingUp color="#10b981" />, trend: `+${stats.invoice_count} bills` },
         { label: 'Low Stock Items', value: lowStock.length, icon: <AlertCircle color="#f59e0b" />, trend: 'Manual Restock' },
         { label: 'Expiry Alerts', value: expiryAlerts.length, icon: <AlertCircle color="#ef4444" />, trend: 'Next 90 Days' },
         { label: 'Active Staff', value: '4', icon: <Users color="#6366f1" />, trend: 'On Shift' },

@@ -375,7 +375,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
     }
 
     return (
-        <div className="fade-in" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 40px' }}>
+        <div className="fade-in" style={{ maxWidth: '1200px', padding: '0 20px 40px' }}>
             {/* Header Area */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <div>

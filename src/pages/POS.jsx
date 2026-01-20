@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Search, ShoppingCart, Trash2, Plus, Minus, X, Check, AlertCircle,
-    User, Receipt, DollarSign, Tag, Info, List as ListIcon, ShieldCheck,
+    User, Receipt, Banknote, Tag, Info, List as ListIcon, ShieldCheck,
     ChevronDown, CreditCard, Wallet, RotateCcw, Save, Printer, Key,
     Package, ArrowRight, Settings, PauseCircle, PlayCircle, Calendar, Filter
 } from 'lucide-react';
@@ -316,7 +316,7 @@ const POS = ({ tenantId }) => {
 
     const grossTotal = cart.reduce((acc, item) => acc + calculateItemTotal(item), 0);
     const netTotal = grossTotal + parseFloat(adjustment || 0); // Allow negative net total
-    const changeAmount = 0; // No change calculation for returns/mixed usually, or just diff
+    const changeAmount = (paymentMode === 'Cash' && receivedCash > netTotal) ? receivedCash - netTotal : 0;
 
     const handleHoldBill = async () => {
         if (cart.length === 0) return;
@@ -424,7 +424,7 @@ const POS = ({ tenantId }) => {
 
             if (res.ok) {
                 const inv = await res.json();
-                setLastInvoice({ ...inv, items: cart }); // Store local cart details for immediate print info if backend doesn't return everything
+                setLastInvoice({ ...inv, items: cart, receivedCash: receivedCash, changeAmount: changeAmount }); // Store details for print
                 setCart([]);
                 setAdjustment(0);
                 setActiveHeldBillId(null);
@@ -539,6 +539,16 @@ const POS = ({ tenantId }) => {
                         <span>${invoice.status === 'Return' || (invoice.net_total < 0) ? 'REFUND DUE:' : 'Payable:'}</span>
                         <span>PKR ${invoice.net_total || invoice.items.reduce((s, i) => s + (i.total_price || 0), 0).toFixed(2)}</span>
                     </div>
+                    ${invoice.payment_method === 'Cash' && invoice.receivedCash > 0 ? `
+                    <div class="row">
+                        <span>Cash Received:</span>
+                        <span>PKR ${invoice.receivedCash.toFixed(2)}</span>
+                    </div>
+                    <div class="row">
+                        <span>Balance Change:</span>
+                        <span>PKR ${invoice.changeAmount ? invoice.changeAmount.toFixed(2) : '0.00'}</span>
+                    </div>
+                    ` : ''}
                     <div class="divider"></div>
                 </div>
                 
@@ -633,7 +643,7 @@ const POS = ({ tenantId }) => {
                                     <td style={{ padding: '12px', textAlign: 'center' }}>
                                         <span style={{ color: b.quantity < 20 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>{b.quantity}</span>
                                     </td>
-                                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>PKR {b.selling_price}</td>
+                                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>Rs. {b.selling_price}</td>
                                     <td style={{ padding: '12px', textAlign: 'right' }}>
                                         <button
                                             className="btn-primary"
@@ -700,7 +710,7 @@ const POS = ({ tenantId }) => {
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{m.generic_name}</div>
                                             </div>
                                             <div style={{ textAlign: 'right' }}>
-                                                <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>PKR {b.selling_price}</div>
+                                                <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Rs. {b.selling_price}</div>
                                                 <div style={{ fontSize: '0.75rem', color: '#10b981' }}>{b.quantity} in stock</div>
                                             </div>
                                         </div>
@@ -761,7 +771,7 @@ const POS = ({ tenantId }) => {
                                             </button>
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'center', fontWeight: '600' }}>
-                                            PKR {(item.unitType === 'Pack' ? item.baseRate * item.factor : item.baseRate).toFixed(2)}
+                                            Rs. {(item.unitType === 'Pack' ? item.baseRate * item.factor : item.baseRate).toFixed(2)}
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'center' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -780,7 +790,7 @@ const POS = ({ tenantId }) => {
                                             />
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'right', fontWeight: '700', color: 'var(--primary)' }}>
-                                            PKR {calculateItemTotal(item).toFixed(2)}
+                                            Rs. {calculateItemTotal(item).toFixed(2)}
                                         </td>
                                         <td style={{ padding: '16px', textAlign: 'center' }}>
                                             <button
@@ -864,7 +874,7 @@ const POS = ({ tenantId }) => {
                     <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                         <h2 style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>GRAND TOTAL</h2>
                         <div style={{ fontSize: '3.5rem', fontWeight: '900', color: 'var(--primary)', letterSpacing: '-2px' }}>
-                            PKR {netTotal.toFixed(2)}
+                            Rs. {netTotal.toFixed(2)}
                         </div>
                     </div>
 
@@ -907,7 +917,7 @@ const POS = ({ tenantId }) => {
                         <div className="input-group">
                             <label>Cash Received</label>
                             <div style={{ position: 'relative' }}>
-                                <span style={{ position: 'absolute', left: '12px', top: '15px', color: 'var(--primary)', fontWeight: 'bold', fontSize: '1rem' }}>RS</span>
+                                <span style={{ position: 'absolute', left: '12px', top: '15px', color: 'var(--primary)', fontWeight: 'bold', fontSize: '1rem' }}>Rs</span>
                                 <input
                                     type="number"
                                     className="input-field"
@@ -921,16 +931,16 @@ const POS = ({ tenantId }) => {
                         <div style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                 <span style={{ color: 'var(--text-secondary)' }}>Gross Amount</span>
-                                <span style={{ fontWeight: 'bold' }}>PKR {grossTotal.toFixed(2)}</span>
+                                <span style={{ fontWeight: 'bold' }}>Rs. {grossTotal.toFixed(2)}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                                 <span style={{ color: 'var(--text-secondary)' }}>Adjustment</span>
-                                <span style={{ color: adjustment < 0 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>{adjustment < 0 ? '-' : '+'}PKR {Math.abs(adjustment).toFixed(2)}</span>
+                                <span style={{ color: adjustment < 0 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>{adjustment < 0 ? '-' : '+'}Rs. {Math.abs(adjustment).toFixed(2)}</span>
                             </div>
                             <div style={{ height: '1px', background: 'var(--border)', margin: '12px 0' }} />
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span style={{ fontSize: '1.1rem', fontWeight: '600' }}>Balance Change</span>
-                                <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#10b981' }}>PKR {changeAmount.toFixed(2)}</span>
+                                <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#10b981' }}>Rs. {changeAmount.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
@@ -1088,7 +1098,7 @@ const POS = ({ tenantId }) => {
                                             <td style={{ padding: '12px' }}>{inv.invoice_number}</td>
                                             <td style={{ padding: '12px' }}>{new Date(inv.created_at).toLocaleString()}</td>
                                             <td style={{ padding: '12px', textAlign: 'center' }}>{inv.items.length}</td>
-                                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>PKR {inv.net_total.toFixed(2)}</td>
+                                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>Rs. {inv.net_total.toFixed(2)}</td>
                                             <td style={{ padding: '12px', textAlign: 'right' }}>
                                                 {historyTab === 'Final' ? (
                                                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

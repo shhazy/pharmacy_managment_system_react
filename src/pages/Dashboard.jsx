@@ -12,6 +12,8 @@ import GeneralSettings from './GeneralSettings';
 import Reports from './Reports';
 import Payments from './Payments';
 import Stock from './Stock';
+import ChartOfAccounts from './ChartOfAccounts';
+import JournalEntries from './JournalEntries';
 import { API_BASE_URL } from '../services/api';
 
 
@@ -225,11 +227,16 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                         active={activeView === 'Analytics'}
                                         onClick={() => setActiveView('Analytics')}
                                     />
-                                    <NavItem
+                                    <NavDropdown
                                         icon={<FileText size={20} />}
-                                        label="Reports"
-                                        active={activeView === 'Reports'}
-                                        onClick={() => setActiveView('Reports')}
+                                        label="Accounting"
+                                        activeView={activeView}
+                                        setActiveView={setActiveView}
+                                        items={[
+                                            { view: 'Reports', label: 'Reports', icon: <FileText size={16} /> },
+                                            { view: 'ChartOfAccounts', label: 'Chart of Accounts', icon: <ListIcon size={16} /> },
+                                            { view: 'JournalEntries', label: 'Journal Entries', icon: <FileText size={16} /> },
+                                        ]}
                                     />
                                     <NavItem
                                         icon={<CreditCard size={20} />}
@@ -360,9 +367,11 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                                                                             activeView === 'GRN' ? <GRN tenantId={tenant} /> :
                                                                                                                 activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
                                                                                                                     activeView === 'Reports' ? <Reports /> :
-                                                                                                                        activeView === 'Payments' ? <Payments tenantId={tenant} /> :
-                                                                                                                            activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
-                                                                                                                                <DashboardOverview tenantId={tenant} />
+                                                                                                                        activeView === 'ChartOfAccounts' ? <ChartOfAccounts tenant={tenant} /> :
+                                                                                                                            activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
+                                                                                                                                activeView === 'Payments' ? <Payments tenantId={tenant} /> :
+                                                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
+                                                                                                                                        <DashboardOverview tenantId={tenant} />
                 )}
 
                 <footer style={{ marginTop: 'auto', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>

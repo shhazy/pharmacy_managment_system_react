@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Building, Phone, FileText, Globe, Mail, MapPin, Upload, Palette } from 'lucide-react';
-import { API_BASE_URL } from '../services/api';
+import { Save, Building, Phone, FileText, Globe, Mail, MapPin, Upload, Palette, Settings } from 'lucide-react';
+import { API_BASE_URL, appSettingsAPI } from '../services/api';
 
 const themes = {
     light: {
@@ -37,11 +37,15 @@ const GeneralSettings = ({ tenantId }) => {
         logo_url: '',
         theme_config: themes.dark // Default
     });
+    const [appSettings, setAppSettings] = useState({
+        default_listing_rows: 10
+    });
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
         fetchSettings();
+        fetchAppSettings();
     }, []);
 
     const fetchSettings = async () => {
@@ -64,6 +68,15 @@ const GeneralSettings = ({ tenantId }) => {
         }
     };
 
+    const fetchAppSettings = async () => {
+        try {
+            const data = await appSettingsAPI.get(tenantId);
+            if (data) setAppSettings(data);
+        } catch (err) {
+            console.error("Failed to load app settings", err);
+        }
+    };
+
     const applyTheme = (theme) => {
         Object.keys(theme).forEach(key => {
             document.documentElement.style.setProperty(key, theme[key]);
@@ -78,18 +91,21 @@ const GeneralSettings = ({ tenantId }) => {
         setLoading(true);
         setMsg('');
         try {
-            const res = await fetch(`${API_BASE_URL}/settings`, {
+            const endpoint = activeTab === 'app' ? '/app-settings' : '/settings';
+            const bodyData = activeTab === 'app' ? appSettings : settings;
+
+            const res = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'X-Tenant-ID': tenantId
                 },
-                body: JSON.stringify(settings)
+                body: JSON.stringify(bodyData)
             });
             if (res.ok) {
                 setMsg('Settings saved successfully!');
-                applyTheme(settings.theme_config); // Ensure applied on save
+                if (activeTab !== 'app') applyTheme(settings.theme_config);
                 setTimeout(() => setMsg(''), 3000);
             } else {
                 setMsg('Failed to save settings.');
@@ -128,6 +144,9 @@ const GeneralSettings = ({ tenantId }) => {
                 <button onClick={() => setActiveTab('theme')} style={tabStyle(activeTab === 'theme')}>
                     <Palette size={18} /> Theme Setting
                 </button>
+                <button onClick={() => setActiveTab('app')} style={tabStyle(activeTab === 'app')}>
+                    <Settings size={18} /> App Settings
+                </button>
             </div>
 
             {/* Content Area */}
@@ -136,10 +155,12 @@ const GeneralSettings = ({ tenantId }) => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: '1.5rem' }}>
-                            {activeTab === 'about' ? 'General Settings' : 'Theme Settings'}
+                            {activeTab === 'about' ? 'General Settings' :
+                                activeTab === 'theme' ? 'Theme Settings' : 'App Settings'}
                         </h2>
                         <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                            {activeTab === 'about' ? 'Manage public profile and legal info.' : 'Customize the look and feel of your app.'}
+                            {activeTab === 'about' ? 'Manage public profile and legal info.' :
+                                activeTab === 'theme' ? 'Customize the look and feel of your app.' : 'Configure global application behavior.'}
                         </p>
                     </div>
                     <button onClick={handleSave} className="btn-primary" disabled={loading} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -151,8 +172,8 @@ const GeneralSettings = ({ tenantId }) => {
                 {msg && (
                     <div style={{
                         padding: '12px',
-                        background: msg.includes('Success') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        color: msg.includes('Success') ? '#10b981' : '#ef4444',
+                        background: msg.includes('successfully') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: msg.includes('successfully') ? '#10b981' : '#ef4444',
                         borderRadius: '8px',
                         marginBottom: '24px'
                     }}>
@@ -280,6 +301,28 @@ const GeneralSettings = ({ tenantId }) => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'app' && (
+                    <div style={{ maxWidth: '600px' }}>
+                        <div className="input-group" style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <FileText size={18} /> Default Listing Rows
+                            </label>
+                            <input
+                                type="number"
+                                className="input-field"
+                                style={{ padding: '12px', fontSize: '1rem' }}
+                                value={appSettings.default_listing_rows}
+                                onChange={e => setAppSettings({ ...appSettings, default_listing_rows: parseInt(e.target.value) || 10 })}
+                                min="1"
+                                max="100"
+                            />
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                This controls the number of items displayed by default in tables like Stock, Products, and Invoices.
+                            </p>
                         </div>
                     </div>
                 )}

@@ -1,37 +1,64 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, Search } from 'lucide-react';
-import { inventoryCRUDAPI } from '../services/api';
+import { inventoryCRUDAPI, appSettingsAPI } from '../services/api';
+import PaginationControls from '../components/PaginationControls';
+import { showSuccess, showError } from '../utils/toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
     const [items, setItems] = useState([]);
-    const [filteredItems, setFilteredItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalItems, setTotalItems] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+
     const [showModal, setShowModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({ name: '', category_id: null });
     const [categories, setCategories] = useState([]);
+
+    // Deletion confirmation state
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [idToDelete, setIdToDelete] = useState(null);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        const initSettings = async () => {
+            try {
+                const settings = await appSettingsAPI.get(tenantId);
+                if (settings && settings.default_listing_rows) {
+                    setPageSize(settings.default_listing_rows);
+                }
+            } catch (error) {
+                console.error('Error fetching app settings:', error);
+            }
+        };
+        initSettings();
+    }, [tenantId]);
 
     useEffect(() => {
         loadItems();
         if (entity === 'sub-categories') {
             loadCategories();
         }
-    }, [entity, tenantId]);
+    }, [entity, tenantId, currentPage, pageSize, debouncedSearchTerm]);
 
-    useEffect(() => {
-        if (searchTerm) {
-            setFilteredItems(items.filter(item => 
-                item.name.toLowerCase().includes(searchTerm.toLowerCase())
-            ));
-        } else {
-            setFilteredItems(items);
-        }
-    }, [searchTerm, items]);
 
     const loadCategories = async () => {
         try {
-            const data = await inventoryCRUDAPI.list('categories', tenantId);
+            const data = await inventoryCRUDAPI.listAll('categories', tenantId);
             setCategories(data);
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -40,15 +67,23 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
 
     const loadItems = async () => {
         try {
-            setLoading(true);
-            const data = await inventoryCRUDAPI.list(entity, tenantId);
-            setItems(data);
-            setFilteredItems(data);
+            if (items.length === 0) setLoading(true);
+            else setRefreshing(true);
+
+            const response = await inventoryCRUDAPI.list(entity, tenantId, {
+                page: currentPage,
+                page_size: pageSize,
+                search: debouncedSearchTerm
+            });
+            setItems(response.items);
+            setTotalItems(response.total);
+            setTotalPages(response.total_pages);
         } catch (error) {
             console.error(`Error loading ${entityName}:`, error);
-            alert(`Error loading ${entityName}: ${error.message}`);
+            showError(`Error loading ${entityName}: ${error.message}`);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -60,23 +95,27 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
 
     const handleEdit = (item) => {
         setEditingItem(item);
-        setFormData({ 
+        setFormData({
             name: item.name,
             category_id: item.category_id || null
         });
         setShowModal(true);
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm(`Are you sure you want to delete this ${entityName.toLowerCase()}?`)) {
-            return;
-        }
+    const handleDelete = (id) => {
+        setIdToDelete(id);
+        setIsConfirmOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!idToDelete) return;
         try {
-            await inventoryCRUDAPI.delete(entity, id, tenantId);
+            await inventoryCRUDAPI.delete(entity, idToDelete, tenantId);
+            showSuccess(`${entityName} deleted successfully`);
             loadItems();
         } catch (error) {
             console.error(`Error deleting ${entityName}:`, error);
-            alert(`Error deleting ${entityName}: ${error.message}`);
+            showError(`Error deleting ${entityName}: ${error.message}`);
         }
     };
 
@@ -92,36 +131,36 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
             loadItems();
         } catch (error) {
             console.error(`Error saving ${entityName}:`, error);
-            alert(`Error saving ${entityName}: ${error.message}`);
+            showError(`Error saving ${entityName}: ${error.message}`);
         }
     };
 
-    if (loading) {
-        return (
-            <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '400px',
-                color: 'var(--text-secondary)'
-            }}>
-                Loading {entityName}...
-            </div>
-        );
-    }
 
     return (
-        <div>
-            {/* Header with Actions */}
+        <div style={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+        }}>
+            {/* Header with Actions - Fixed */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '24px',
                 flexWrap: 'wrap',
-                gap: '16px'
+                gap: '24px',
+                flexShrink: 0,
+                paddingBottom: '20px',
+                borderBottom: '1px solid var(--border)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '300px' }}>
+                <div style={{ flexShrink: 0 }}>
+                    <h2 style={{ fontSize: '1.5rem', margin: 0, color: 'var(--text-primary)' }}>
+                        {entityName}
+                    </h2>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, justifyContent: 'flex-end', minWidth: '300px' }}>
                     <div style={{
                         position: 'relative',
                         flex: 1,
@@ -138,7 +177,10 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                             type="text"
                             placeholder={`Search ${entityName.toLowerCase()}...`}
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1);
+                            }}
                             style={{
                                 width: '100%',
                                 padding: '10px 12px 10px 40px',
@@ -146,40 +188,85 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                                 border: '1px solid var(--border)',
                                 borderRadius: '8px',
                                 color: 'var(--text-primary)',
-                                fontSize: '0.9rem'
+                                fontSize: '0.9rem',
+                                transition: 'all 0.2s'
                             }}
                         />
                     </div>
+
+                    <button
+                        onClick={handleCreate}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 20px',
+                            background: 'var(--primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
+                        }}
+                    >
+                        <Plus size={18} />
+                        Add New
+                    </button>
                 </div>
-                <button
-                    onClick={handleCreate}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '10px 20px',
-                        background: 'var(--primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontSize: '0.9rem',
-                        fontWeight: '500'
-                    }}
-                >
-                    <Plus size={18} />
-                    Add New
-                </button>
             </div>
 
-            {/* Items List */}
+            {/* Items List - Scrollable */}
             <div style={{
                 background: 'rgba(255,255,255,0.02)',
                 borderRadius: '12px',
                 border: '1px solid var(--border)',
-                overflow: 'hidden'
+                position: 'relative',
+                flex: 1,
+                overflowY: 'auto',
+                minHeight: 0
             }}>
-                {filteredItems.length === 0 ? (
+                {/* Initial Loading State */}
+                {loading && (
+                    <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--text-secondary)',
+                        background: 'var(--background)',
+                        zIndex: 20,
+                        gap: '12px'
+                    }}>
+                        <div className="spin" style={{ width: '24px', height: '24px', border: '2px solid rgba(99, 102, 241, 0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%' }} />
+                        <span>Loading {entityName}...</span>
+                    </div>
+                )}
+
+                {/* Refreshing Overlay */}
+                {refreshing && (
+                    <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.4)',
+                        backdropFilter: 'blur(1px)',
+                        zIndex: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <div style={{ background: 'var(--surface)', padding: '6px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            <div className="spin" style={{ width: '12px', height: '12px', border: '2px solid rgba(99, 102, 241, 0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%' }} />
+                            Updating...
+                        </div>
+                    </div>
+                )}
+
+                {items.length === 0 && !loading ? (
                     <div style={{
                         padding: '40px',
                         textAlign: 'center',
@@ -188,10 +275,20 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                         No {entityName.toLowerCase()} found. Click "Add New" to create one.
                     </div>
                 ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
+                    <table style={{
+                        width: '100%',
+                        borderCollapse: 'separate',
+                        borderSpacing: 0,
+                        opacity: refreshing ? 0.6 : 1,
+                        transition: 'opacity 0.2s',
+                        visibility: loading ? 'hidden' : 'visible'
+                    }}>
+                        <thead style={{
+                            position: 'sticky',
+                            top: 0,
+                            zIndex: 10
+                        }}>
                             <tr style={{
-                                background: 'rgba(255,255,255,0.05)',
                                 borderBottom: '1px solid var(--border)'
                             }}>
                                 <th style={{
@@ -199,7 +296,9 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                                     textAlign: 'left',
                                     color: 'var(--text-primary)',
                                     fontWeight: '600',
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.9rem',
+                                    background: '#1a1f2e', // Solid background for sticky header
+                                    borderBottom: '1px solid var(--border)'
                                 }}>Name</th>
                                 {entity === 'sub-categories' && (
                                     <th style={{
@@ -207,7 +306,9 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                                         textAlign: 'left',
                                         color: 'var(--text-primary)',
                                         fontWeight: '600',
-                                        fontSize: '0.9rem'
+                                        fontSize: '0.9rem',
+                                        background: '#1a1f2e',
+                                        borderBottom: '1px solid var(--border)'
                                     }}>Category</th>
                                 )}
                                 <th style={{
@@ -215,25 +316,29 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                                     textAlign: 'left',
                                     color: 'var(--text-primary)',
                                     fontWeight: '600',
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.9rem',
+                                    background: '#1a1f2e',
+                                    borderBottom: '1px solid var(--border)'
                                 }}>Status</th>
                                 <th style={{
                                     padding: '16px',
                                     textAlign: 'right',
                                     color: 'var(--text-primary)',
                                     fontWeight: '600',
-                                    fontSize: '0.9rem'
+                                    fontSize: '0.9rem',
+                                    background: '#1a1f2e',
+                                    borderBottom: '1px solid var(--border)'
                                 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredItems.map((item) => (
+                            {items.map((item) => (
                                 <tr key={item.id} style={{
                                     borderBottom: '1px solid var(--border)',
                                     transition: 'background 0.2s'
                                 }}
-                                onMouseEnter={(e) => e.target.parentElement.style.background = 'rgba(255,255,255,0.02)'}
-                                onMouseLeave={(e) => e.target.parentElement.style.background = 'transparent'}
+                                    onMouseEnter={(e) => e.target.parentElement.style.background = 'rgba(255,255,255,0.02)'}
+                                    onMouseLeave={(e) => e.target.parentElement.style.background = 'transparent'}
                                 >
                                     <td style={{ padding: '16px', color: 'var(--text-primary)' }}>
                                         {item.name}
@@ -303,6 +408,20 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                 )}
             </div>
 
+            <div style={{ flexShrink: 0 }}>
+                <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    totalItems={totalItems}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
+            </div>
+
             {/* Modal */}
             {showModal && (
                 <div style={{
@@ -317,7 +436,7 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                     alignItems: 'center',
                     zIndex: 1000
                 }}
-                onClick={() => setShowModal(false)}
+                    onClick={() => setShowModal(false)}
                 >
                     <div style={{
                         background: 'var(--surface)',
@@ -327,7 +446,7 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                         maxWidth: '500px',
                         border: '1px solid var(--border)'
                     }}
-                    onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div style={{
                             display: 'flex',
@@ -458,6 +577,19 @@ const InventoryCRUDManager = ({ tenantId, entity, entityName }) => {
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={isConfirmOpen}
+                onClose={() => {
+                    setIsConfirmOpen(false);
+                    setIdToDelete(null);
+                }}
+                onConfirm={confirmDelete}
+                title={`Delete ${entityName}`}
+                message={`Are you sure you want to delete this ${entityName.toLowerCase()}? This action might affect related data and cannot be undone.`}
+                confirmText="Delete"
+                type="danger"
+            />
         </div>
     );
 };

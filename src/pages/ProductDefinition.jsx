@@ -4,6 +4,7 @@ import {
     Layers, Package, DollarSign, List, Truck, Box, Edit3, Clipboard
 } from 'lucide-react';
 import { inventoryCRUDAPI, API_BASE_URL } from '../services/api';
+import { showSuccess, showError } from '../utils/toast';
 
 const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
     const [loading, setLoading] = useState(false);
@@ -42,7 +43,10 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
         manufacturer_id: null,
         rack_id: null,
         supplier_id: null,
+        suppliers: [],
         purchase_conv_unit_id: null,
+        preferred_purchase_unit_id: null,
+        preferred_pos_unit_id: null,
         control_drug: false,
         purchase_conv_factor: null,
         average_cost: null,
@@ -63,7 +67,12 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
         if (initialData) {
             setFormData({
                 ...initialData,
-                date: initialData.date ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0]
+                date: initialData.date ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0],
+                suppliers: initialData.product_suppliers ? initialData.product_suppliers.map(ps => ps.supplier_id) : [],
+                purchase_conv_unit_id: initialData.purchase_conv_unit_id || '',
+                preferred_purchase_unit_id: initialData.preferred_purchase_unit_id || '',
+                preferred_pos_unit_id: initialData.preferred_pos_unit_id || '',
+                active: initialData.active !== undefined ? initialData.active : true, // Ensure active is set
             });
         }
     }, [initialData]);
@@ -80,17 +89,17 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                 categoryGroupsData, genericsData, calSeasonsData, manufacturersData,
                 racksData, suppliersData, purchaseConvUnitsData
             ] = await Promise.all([
-                inventoryCRUDAPI.list('line-items', tenantId),
-                inventoryCRUDAPI.list('categories', tenantId),
-                inventoryCRUDAPI.list('sub-categories', tenantId),
-                inventoryCRUDAPI.list('product-groups', tenantId),
-                inventoryCRUDAPI.list('category-groups', tenantId),
-                inventoryCRUDAPI.list('generics', tenantId),
-                inventoryCRUDAPI.list('calculate-seasons', tenantId),
-                inventoryCRUDAPI.list('manufacturers', tenantId),
-                inventoryCRUDAPI.list('racks', tenantId),
-                inventoryCRUDAPI.list('suppliers', tenantId),
-                inventoryCRUDAPI.list('purchase-conversion-units', tenantId)
+                inventoryCRUDAPI.listAll('line-items', tenantId),
+                inventoryCRUDAPI.listAll('categories', tenantId),
+                inventoryCRUDAPI.listAll('sub-categories', tenantId),
+                inventoryCRUDAPI.listAll('product-groups', tenantId),
+                inventoryCRUDAPI.listAll('category-groups', tenantId),
+                inventoryCRUDAPI.listAll('generics', tenantId),
+                inventoryCRUDAPI.listAll('calculate-seasons', tenantId),
+                inventoryCRUDAPI.listAll('manufacturers', tenantId),
+                inventoryCRUDAPI.listAll('racks', tenantId),
+                inventoryCRUDAPI.listAll('suppliers', tenantId),
+                inventoryCRUDAPI.listAll('purchase-conversion-units', tenantId)
             ]);
 
             setLineItems(lineItemsData || []);
@@ -113,15 +122,38 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
 
     const handleSave = async () => {
         if (!formData.product_name || !formData.category_id || !formData.manufacturer_id) {
-            alert('Please fill in all mandatory fields (Name, Category, Manufacturer)');
+            showError('Please fill in all mandatory fields (Name, Category, Manufacturer)');
             return;
         }
 
         try {
             setSaving(true);
+
+            // Clean up payload: convert empty strings to null for optional integer fields
+            const cleanedData = { ...formData };
+            const optionalIntFields = [
+                'purchase_conv_unit_id',
+                'preferred_purchase_unit_id',
+                'preferred_pos_unit_id',
+                'line_item_id',
+                'sub_category_id',
+                'product_group_id',
+                'category_group_id',
+                'rack_id',
+                'cal_season_id',
+                'supplier_id'
+            ];
+
+            optionalIntFields.forEach(field => {
+                if (cleanedData[field] === '') {
+                    cleanedData[field] = null;
+                }
+            });
+
             const payload = {
-                ...formData,
-                date: formData.date ? new Date(formData.date).toISOString() : null
+                ...cleanedData,
+                date: formData.date ? new Date(formData.date).toISOString() : null,
+                suppliers: formData.suppliers.map(id => ({ supplier_id: id }))
             };
 
             const isEditing = !!formData.id;
@@ -140,16 +172,19 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
 
             if (!response.ok) {
                 const error = await response.json();
-                alert(`Error: ${error.detail || 'Failed to save product'}`);
+                showError(`Error: ${error.detail || 'Failed to save product'}`);
             } else {
-                alert(isEditing ? 'Product updated successfully!' : 'Product created successfully!');
+                showSuccess(isEditing ? 'Product updated successfully!' : 'Product created successfully!');
                 if (onSaveSuccess) onSaveSuccess();
                 if (!isEditing) {
                     setFormData({
                         line_item_id: null, product_name: '', category_id: null, sub_category_id: null,
                         product_group_id: null, category_group_id: null, generics_id: null,
                         cal_season_id: null, manufacturer_id: null, rack_id: null, supplier_id: null,
-                        purchase_conv_unit_id: null, control_drug: false, purchase_conv_factor: null,
+                        purchase_conv_unit_id: null,
+                        preferred_purchase_unit_id: null,
+                        preferred_pos_unit_id: null,
+                        control_drug: false, purchase_conv_factor: null,
                         average_cost: null, date: new Date().toISOString().split('T')[0], retail_price: null,
                         active: true, technical_details: '', internal_comments: '', product_type: 1,
                         min_inventory_level: null, optimal_inventory_level: null, max_inventory_level: null,
@@ -159,7 +194,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
             }
         } catch (error) {
             console.error('Error saving product:', error);
-            alert('Failed to save product');
+            showError('Failed to save product');
         } finally {
             setSaving(false);
         }
@@ -173,7 +208,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
             let payload = { name };
             if (entity === 'sub-categories') {
                 if (!formData.category_id) {
-                    alert('Please select a category first');
+                    showError('Please select a category first');
                     return;
                 }
                 payload.category_id = formData.category_id;
@@ -182,7 +217,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
             await inventoryCRUDAPI.create(entity, payload, tenantId);
             await loadAllData();
         } catch (err) {
-            alert(`Error creating ${label}: ` + (err.detail || err.message));
+            showError(`Error creating ${label}: ` + (err.detail || err.message));
         }
     };
 
@@ -339,6 +374,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
         );
     };
 
+
     const SectionTab = ({ id, label, icon: Icon }) => (
         <button
             onClick={() => setActiveSection(id)}
@@ -375,7 +411,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
     }
 
     return (
-        <div className="fade-in" style={{ maxWidth: '1200px', padding: '0 20px 40px' }}>
+        <div className="fade-in" style={{ padding: '0 20px 40px' }}>
             {/* Header Area */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <div>
@@ -429,6 +465,17 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                             />
 
                             <SearchableDropdown
+                                label="Primary Category"
+                                mandatory
+                                value={formData.category_id}
+                                options={categories}
+                                searchKey="category"
+                                onChange={(id) => setFormData(prev => ({ ...prev, category_id: id }))}
+                                placeholder="Select Category"
+                                entity="categories"
+                            />
+
+                            <SearchableDropdown
                                 label="Generic Name"
                                 value={formData.generics_id}
                                 options={generics}
@@ -458,6 +505,13 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                 />
                             </div>
 
+
+
+                        </div>
+                    )}
+
+                    {activeSection === 'org' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
                             <div className="input-group">
                                 <label>Control Status</label>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -477,21 +531,6 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {activeSection === 'org' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-                            <SearchableDropdown
-                                label="Primary Category"
-                                mandatory
-                                value={formData.category_id}
-                                options={categories}
-                                searchKey="category"
-                                onChange={(id) => setFormData(prev => ({ ...prev, category_id: id }))}
-                                placeholder="Select Category"
-                                entity="categories"
-                            />
 
                             <SearchableDropdown
                                 label="Sub Category"
@@ -556,7 +595,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                         step="0.01"
                                         placeholder="0.00"
                                         className="input-field"
-                                        style={{ paddingLeft: '32px' }}
+                                        style={{ paddingLeft: '50px' }}
                                         value={formData.average_cost || ''}
                                         onChange={(e) => setFormData(prev => ({ ...prev, average_cost: e.target.value ? parseFloat(e.target.value) : null }))}
                                     />
@@ -572,7 +611,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                         step="0.01"
                                         placeholder="0.00"
                                         className="input-field"
-                                        style={{ paddingLeft: '32px' }}
+                                        style={{ paddingLeft: '50px' }}
                                         value={formData.retail_price || ''}
                                         onChange={(e) => setFormData(prev => ({ ...prev, retail_price: e.target.value ? parseFloat(e.target.value) : null }))}
                                     />
@@ -589,8 +628,17 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                 entity="suppliers"
                             />
 
+                            <MultiSelectDropdown
+                                label="Additional Suppliers"
+                                value={formData.suppliers}
+                                options={suppliers}
+                                searchKey="addSuppliers"
+                                onChange={(val) => setFormData(prev => ({ ...prev, suppliers: val }))}
+                                placeholder="Select Secondary Suppliers"
+                            />
+
                             <div className="input-group" style={{ gridColumn: 'span 1' }}>
-                                <label>Conversion Logic</label>
+                                {/* <label>Conversion Logic</label> */}
                                 <div style={{ display: 'flex', gap: '12px' }}>
                                     <div style={{ flex: 1 }}>
                                         <SearchableDropdown
@@ -617,6 +665,35 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                                     Example: 1 Box = 10 Tablets (Factor: 10)
                                 </p>
+                            </div>
+
+                            {/* Preferred Units */}
+                            <div className="input-group">
+                                <label>Preferred Purchase Unit</label>
+                                <select
+                                    className="input-field"
+                                    value={formData.preferred_purchase_unit_id || ''}
+                                    onChange={(e) => setFormData({ ...formData, preferred_purchase_unit_id: e.target.value ? parseInt(e.target.value) : null })}
+                                >
+                                    <option value="">Select Purchase Unit</option>
+                                    {purchaseConvUnits.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="input-group">
+                                <label>Preferred POS Unit</label>
+                                <select
+                                    className="input-field"
+                                    value={formData.preferred_pos_unit_id || ''}
+                                    onChange={(e) => setFormData({ ...formData, preferred_pos_unit_id: e.target.value ? parseInt(e.target.value) : null })}
+                                >
+                                    <option value="">Select POS Unit</option>
+                                    {purchaseConvUnits.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                     )}
@@ -751,6 +828,105 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                     <span>Searchable dropdowns support adding new items on the fly.</span>
                 </div>
             </div>
+        </div >
+    );
+};
+
+const MultiSelectDropdown = ({
+    label, value = [], options, searchKey, onChange, placeholder
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredOptions = options.filter(opt =>
+        (opt.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const toggleOption = (id) => {
+        const newValue = value.includes(id)
+            ? value.filter(v => v !== id)
+            : [...value, id];
+        onChange(newValue);
+    };
+
+    const getDisplayLabel = () => {
+        if (!value || value.length === 0) return placeholder;
+        if (value.length === 1) {
+            const opt = options.find(o => o.id === value[0]);
+            return opt ? opt.name : placeholder;
+        }
+        return `${value.length} Selected`;
+    };
+
+    return (
+        <div ref={dropdownRef} className="input-group" style={{ marginBottom: '20px', position: 'relative' }}>
+            <label>{label}</label>
+            <div
+                onClick={() => setIsOpen(!isOpen)}
+                className="input-field"
+                style={{
+                    cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    borderColor: isOpen ? 'var(--primary)' : 'var(--border)'
+                }}
+            >
+                <span style={{ color: value.length > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                    {getDisplayLabel()}
+                </span>
+                <ChevronDown size={18} />
+            </div>
+
+            {isOpen && (
+                <div className="fade-in" style={{
+                    position: 'absolute', left: 0, right: 0,
+                    background: 'var(--surface)', border: '1px solid var(--glass-border)',
+                    borderRadius: '12px', zIndex: 1000, padding: '8px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)', maxHeight: '300px', overflowY: 'auto'
+                }}>
+                    <input
+                        type="text" placeholder="Search..."
+                        value={searchTerm}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        style={{
+                            width: '100%', padding: '8px', marginBottom: '8px',
+                            background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
+                            borderRadius: '8px', color: 'white'
+                        }}
+                    />
+                    {filteredOptions.map(opt => (
+                        <div
+                            key={opt.id}
+                            onClick={() => toggleOption(opt.id)}
+                            style={{
+                                padding: '8px', cursor: 'pointer', borderRadius: '6px',
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: value.includes(opt.id) ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                            }}
+                        >
+                            <div style={{
+                                width: '16px', height: '16px', borderRadius: '4px',
+                                border: '1px solid ' + (value.includes(opt.id) ? 'var(--primary)' : 'var(--text-secondary)'),
+                                background: value.includes(opt.id) ? 'var(--primary)' : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                            }}>
+                                {value.includes(opt.id) && <Check size={12} color="white" />}
+                            </div>
+                            {opt.name}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };

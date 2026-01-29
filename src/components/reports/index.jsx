@@ -142,6 +142,7 @@ export const PurchaseRegister = () => {
                             <th className="px-6 py-4 font-semibold">Supplier</th>
                             <th className="px-6 py-4 font-semibold">Invoice #</th>
                             <th className="px-6 py-4 font-semibold">Mode</th>
+                            <th className="px-6 py-4 font-semibold text-right">Adv. Tax</th>
                             <th className="px-6 py-4 font-semibold text-right">Net Total</th>
                         </tr>
                     </thead>
@@ -156,6 +157,9 @@ export const PurchaseRegister = () => {
                                     <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold ${item.payment_mode === 'Cash' ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
                                         {item.payment_mode}
                                     </span>
+                                </td>
+                                <td className="px-6 py-4 text-right text-yellow-400">
+                                    {parseFloat(item.advance_tax) > 0 ? `Rs. ${parseFloat(item.advance_tax).toLocaleString()}` : '-'}
                                 </td>
                                 <td className="px-6 py-4 text-right font-bold text-white">Rs. {parseFloat(item.amount).toLocaleString()}</td>
                             </tr>

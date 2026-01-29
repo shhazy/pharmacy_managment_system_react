@@ -6,6 +6,7 @@ import {
     Package, ArrowRight, Settings, PauseCircle, PlayCircle, Calendar, Filter
 } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
+import { showSuccess, showError, showInfo } from '../utils/toast';
 
 const POS = ({ tenantId }) => {
     // --- STATE ---
@@ -199,7 +200,7 @@ const POS = ({ tenantId }) => {
     const addToCart = useCallback((med, batch, requestedQty = 1, stayOpen = false) => {
         // Check for Control Drug
         if (med.control_drug) {
-            alert("⚠️ PRESCRIBED MEDICINE: Please verify doctor's prescription before sale.");
+            showInfo("⚠️ PRESCRIBED MEDICINE: Please verify doctor's prescription before sale.");
             if (config.controlTrackMode === 'Lock') {
                 // Implement locking logic if needed
             }
@@ -216,7 +217,7 @@ const POS = ({ tenantId }) => {
             const unitsNeeded = existing.unitType === 'Pack' ? newQty * conversionFactor : newQty;
 
             if (unitsNeeded > stockAvailable) {
-                alert(`Insufficient Stock! Only ${stockAvailable} units available.`);
+                showError(`Insufficient Stock! Only ${stockAvailable} units available.`);
                 return;
             }
 
@@ -228,7 +229,7 @@ const POS = ({ tenantId }) => {
         } else {
             const unitsNeeded = config.defaultSaleUnit === 'Pack' ? requestedQty * conversionFactor : requestedQty;
             if (unitsNeeded > stockAvailable) {
-                alert(`Insufficient Stock! Only ${stockAvailable} units available.`);
+                showError(`Insufficient Stock! Only ${stockAvailable} units available.`);
                 return;
             }
 
@@ -293,7 +294,7 @@ const POS = ({ tenantId }) => {
         setCurrentDeckIndex(-1);
         setShowInvoiceHistory(false);
         setAdjustment(0);
-        alert("Invoice loaded for RETURN. Quantities set to negative.");
+        showInfo("Invoice loaded for RETURN. Quantities set to negative.");
     };
 
     // Calculations
@@ -359,9 +360,9 @@ const POS = ({ tenantId }) => {
                 await fetchHeldInvoices();
 
                 if (activeHeldBillId) {
-                    alert("Held Bill Updated.");
+                    showSuccess("Held Bill Updated.");
                 } else {
-                    alert("Bill placed on HOLD.");
+                    showSuccess("Bill placed on HOLD.");
                     // If we just held a new bill, it becomes index 0.
                     // We should probably stay on it or clear?
                     // Standard POS: "Hold" clears the screen for next customer.
@@ -372,9 +373,9 @@ const POS = ({ tenantId }) => {
                 }
                 fetchInventory();
             } else {
-                alert("Failed to hold bill");
+                showError("Failed to hold bill");
             }
-        } catch (e) { alert("Failed to hold bill"); }
+        } catch (e) { showError("Failed to hold bill"); }
         finally { setProcessing(false); }
     };
 
@@ -435,9 +436,9 @@ const POS = ({ tenantId }) => {
                 fetchInventory();
             } else {
                 const err = await res.json();
-                alert(err.detail || "Checkout failed");
+                showError(err.detail || "Checkout failed");
             }
-        } catch (e) { alert("Checkout failed"); }
+        } catch (e) { showError("Checkout failed"); }
         finally { setProcessing(false); }
     };
 
@@ -665,26 +666,28 @@ const POS = ({ tenantId }) => {
     return (
         <div style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 350px',
-            gap: '24px',
-            // height: 'calc(100vh - 200px)',
-            color: 'var(--text-primary)'
+            gridTemplateColumns: '1fr 360px',
+            gap: '20px',
+            flex: 1,
+            minHeight: 0,
+            color: 'var(--text-primary)',
+            overflow: 'hidden' // Force the whole POS layout to stay in viewport
         }}>
             {/* --- LEFT SIDE: CART & SEARCH --- */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden' }}>
                 {/* Search Bar Area */}
                 <div style={{ position: 'relative' }}>
-                    <div className="glass-card" style={{ padding: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 12px', color: 'var(--primary)', fontWeight: 'bold' }}>
-                            <Tag size={20} /> SKU Scan
+                    <div className="glass-card" style={{ padding: '8px 12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                            <Tag size={16} /> SCAN
                         </div>
-                        <div style={{ flex: 1, position: 'relative' }}>
+                        <div style={{ width: '380px', position: 'relative' }}>
                             <Search style={{ position: 'absolute', left: '16px', top: '16px', color: 'var(--text-secondary)' }} size={24} />
                             <input
                                 ref={searchInputRef}
                                 className="input-field"
-                                placeholder="Type medicine name or scan barcode... (F3 for list)"
-                                style={{ padding: '16px 16px 16px 52px', fontSize: '1.2rem', borderRadius: '12px' }}
+                                placeholder="Medicine name or scan... (F3 list)"
+                                style={{ padding: '12px 16px 12px 48px', fontSize: '1.1rem', borderRadius: '10px' }}
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                             />
@@ -719,13 +722,85 @@ const POS = ({ tenantId }) => {
                                 </div>
                             )}
                         </div>
+                        <div style={{ flex: 1 }} />
+
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', borderLeft: '1px solid var(--border)', paddingLeft: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 'bold', letterSpacing: '0.5px' }}>DISCOUNT MODE</div>
+                                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '2px', border: '1px solid var(--border)' }}>
+                                    <button
+                                        onClick={() => {
+                                            setConfig(p => {
+                                                const next = { ...p, discountMode: 'Percent' };
+                                                localStorage.setItem('pos_config', JSON.stringify(next));
+                                                return next;
+                                            });
+                                        }}
+                                        style={{
+                                            flex: 1, padding: '6px 0', fontSize: '0.75rem', borderRadius: '6px', border: 'none',
+                                            background: config.discountMode === 'Percent' ? 'var(--primary)' : 'transparent',
+                                            color: 'white', cursor: 'pointer', transition: 'all 0.3s', fontWeight: config.discountMode === 'Percent' ? 'bold' : 'normal'
+                                        }}
+                                    >%</button>
+                                    <button
+                                        onClick={() => {
+                                            setConfig(p => {
+                                                const next = { ...p, discountMode: 'Value' };
+                                                localStorage.setItem('pos_config', JSON.stringify(next));
+                                                return next;
+                                            });
+                                        }}
+                                        style={{
+                                            flex: 1, padding: '6px 0', fontSize: '0.75rem', borderRadius: '6px', border: 'none',
+                                            background: config.discountMode === 'Value' ? 'var(--primary)' : 'transparent',
+                                            color: 'white', cursor: 'pointer', transition: 'all 0.3s', fontWeight: config.discountMode === 'Value' ? 'bold' : 'normal'
+                                        }}
+                                    >Fixed</button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 'bold', letterSpacing: '0.5px' }}>DEFAULT UNIT</div>
+                                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '2px', border: '1px solid var(--border)' }}>
+                                    <button
+                                        onClick={() => {
+                                            setConfig(p => {
+                                                const next = { ...p, defaultSaleUnit: 'Single' };
+                                                localStorage.setItem('pos_config', JSON.stringify(next));
+                                                return next;
+                                            });
+                                        }}
+                                        style={{
+                                            flex: 1, padding: '6px 0', fontSize: '0.75rem', borderRadius: '6px', border: 'none',
+                                            background: config.defaultSaleUnit === 'Single' ? 'var(--primary)' : 'transparent',
+                                            color: 'white', cursor: 'pointer', transition: 'all 0.3s', fontWeight: config.defaultSaleUnit === 'Single' ? 'bold' : 'normal'
+                                        }}
+                                    >Single</button>
+                                    <button
+                                        onClick={() => {
+                                            setConfig(p => {
+                                                const next = { ...p, defaultSaleUnit: 'Pack' };
+                                                localStorage.setItem('pos_config', JSON.stringify(next));
+                                                return next;
+                                            });
+                                        }}
+                                        style={{
+                                            flex: 1, padding: '6px 0', fontSize: '0.75rem', borderRadius: '6px', border: 'none',
+                                            background: config.defaultSaleUnit === 'Pack' ? 'var(--primary)' : 'transparent',
+                                            color: 'white', cursor: 'pointer', transition: 'all 0.3s', fontWeight: config.defaultSaleUnit === 'Pack' ? 'bold' : 'normal'
+                                        }}
+                                    >Pack</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <button
                             className="btn-secondary"
-                            style={{ height: '60px', width: '60px' }}
+                            style={{ height: '44px', width: '44px', minWidth: '44px', padding: 0 }}
                             onClick={() => setShowHelp(true)}
                             title="Product Browser (F3)"
                         >
-                            <ListIcon />
+                            <ListIcon size={18} />
                         </button>
                     </div>
                 </div>
@@ -736,14 +811,14 @@ const POS = ({ tenantId }) => {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead style={{ position: 'sticky', top: 0, background: 'rgba(30, 41, 59, 0.9)', backdropFilter: 'blur(5px)', zIndex: 10 }}>
                                 <tr>
-                                    <th style={{ padding: '16px', textAlign: 'left', width: '50px' }}>#</th>
-                                    <th style={{ padding: '16px', textAlign: 'left' }}>Product Details</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', width: '120px' }}>Unit</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', width: '100px' }}>Rate</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', width: '100px' }}>Qty</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', width: '120px' }}>{config.discountMode === 'Percent' ? 'Disc %' : 'Disc PKR'}</th>
-                                    <th style={{ padding: '16px', textAlign: 'right', width: '120px' }}>Total</th>
-                                    <th style={{ padding: '16px', textAlign: 'center', width: '60px' }}></th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'left', width: '40px', fontSize: '0.85rem' }}>#</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.85rem' }}>Product Details</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', width: '100px', fontSize: '0.85rem' }}>Unit</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', width: '90px', fontSize: '0.85rem' }}>Rate</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', width: '90px', fontSize: '0.85rem' }}>Qty</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', width: '100px', fontSize: '0.85rem' }}>{config.discountMode === 'Percent' ? 'Disc %' : 'Disc Rs'}</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'right', width: '100px', fontSize: '0.85rem' }}>Total</th>
+                                    <th style={{ padding: '12px 16px', textAlign: 'center', width: '50px', fontSize: '0.85rem' }}></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -795,7 +870,7 @@ const POS = ({ tenantId }) => {
                                         <td style={{ padding: '16px', textAlign: 'center' }}>
                                             <button
                                                 onClick={() => removeFromCart(item.batchId, item.unitType)}
-                                                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                                style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer' }}
                                             >
                                                 <Trash2 size={18} />
                                             </button>
@@ -815,185 +890,193 @@ const POS = ({ tenantId }) => {
                     </div>
 
                     {/* Cart Footer */}
-                    <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', gap: '20px' }}>
-                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Items: <span style={{ color: 'white', fontWeight: 'bold' }}>{cart.length}</span></div>
-                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total Units: <span style={{ color: 'white', fontWeight: 'bold' }}>{cart.reduce((a, b) => a + b.qty, 0)}</span></div>
+                    <div style={{ padding: '12px 20px', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '16px' }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Items: <span style={{ color: 'white', fontWeight: 'bold' }}>{cart.length}</span></div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Units: <span style={{ color: 'white', fontWeight: 'bold' }}>{cart.reduce((a, b) => a + b.qty, 0)}</span></div>
                         </div>
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', overflow: 'hidden', marginRight: '16px' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', overflow: 'hidden' }}>
                                 <button
                                     onClick={() => navigateDeck('back')}
                                     disabled={currentDeckIndex >= heldInvoices.length - 1}
-                                    style={{ padding: '8px 12px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', opacity: currentDeckIndex >= heldInvoices.length - 1 ? 0.3 : 1 }}
+                                    style={{ padding: '6px 10px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', opacity: currentDeckIndex >= heldInvoices.length - 1 ? 0.3 : 1, fontSize: '0.75rem' }}
                                 >
-                                    &lt; Prev Hold
+                                    &lt; Prev
                                 </button>
-                                <div style={{ padding: '0 8px', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold' }}>
-                                    {currentDeckIndex === -1 ? 'NEW SALE' : `HOLD ${heldInvoices.length - currentDeckIndex}/${heldInvoices.length}`}
+                                <div style={{ padding: '0 8px', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
+                                    {currentDeckIndex === -1 ? 'NEW' : `HOLD ${heldInvoices.length - currentDeckIndex}`}
                                 </div>
                                 <button
                                     onClick={() => navigateDeck('forward')}
                                     disabled={currentDeckIndex === -1}
-                                    style={{ padding: '8px 12px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', opacity: currentDeckIndex === -1 ? 0.3 : 1 }}
+                                    style={{ padding: '6px 10px', background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', opacity: currentDeckIndex === -1 ? 0.3 : 1, fontSize: '0.75rem' }}
                                 >
-                                    Next Hold &gt;
+                                    Next &gt;
                                 </button>
                             </div>
 
-                            <button className="btn-secondary" onClick={() => setCart([])}><RotateCcw size={16} /> Reset Cart</button>
-                            {lastInvoice && (
-                                <button className="btn-secondary" onClick={() => printReceipt()} title="Reprint Last Receipt">
-                                    <Printer size={16} /> Last Rec.
-                                </button>
-                            )}
-                            <button className="btn-secondary" onClick={() => setShowAdjustmentModal(true)}><Settings size={16} /> Adjustment (F9)</button>
+                            <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => setCart([])}><RotateCcw size={14} /> Clear</button>
+                            <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => setShowAdjustmentModal(true)}><Settings size={14} /> Adj</button>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* --- RIGHT SIDE: BILL SUMMARY --- */}
-            <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: '24px' }}>
-                <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '16px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                            <span>Receipt #</span>
-                            <span style={{ color: 'white' }}>{`R-${Math.floor(Date.now() / 1000)}`}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', overflow: 'hidden' }}>
+                <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px', gap: '10px', justifyContent: 'space-between', overflow: 'hidden' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div style={{ padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                            <div style={{ fontSize: '0.55rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>RECEIPT #</div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{`R-${Math.floor(Date.now() / 1000000)}`}</div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                            <span>Date/Time</span>
-                            <span style={{ color: 'white' }}>{new Date().toLocaleString()}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                            <span>Cashier</span>
-                            <span style={{ color: 'white' }}>Current User</span>
+                        <button
+                            onClick={() => { setShowInvoiceHistory(true); setHistoryTab('Final'); fetchInvoices(); }}
+                            style={{
+                                padding: '8px',
+                                background: 'rgba(255,255,255,0.03)',
+                                borderRadius: '8px',
+                                border: '1px solid var(--border)',
+                                textAlign: 'center',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                color: 'white'
+                            }}>
+                            <Receipt size={14} color="var(--primary)" />
+                            <span style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>History</span>
+                        </button>
+                    </div>
+
+                    <div style={{
+                        textAlign: 'center',
+                        padding: '12px 6px',
+                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(15, 23, 42, 0.4))',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                    }}>
+                        <h2 style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '2px', letterSpacing: '1px' }}>GRAND TOTAL</h2>
+                        <div style={{ fontSize: '2.5rem', fontWeight: '900', color: 'var(--primary)', letterSpacing: '-1px', lineHeight: '1' }}>
+                            <span style={{ fontSize: '1rem', verticalAlign: 'top', marginRight: '4px' }}>Rs.</span>
+                            {netTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                     </div>
 
-                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                        <h2 style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>GRAND TOTAL</h2>
-                        <div style={{ fontSize: '3.5rem', fontWeight: '900', color: 'var(--primary)', letterSpacing: '-2px' }}>
-                            Rs. {netTotal.toFixed(2)}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <button
+                                onClick={() => setPaymentMode('Cash')}
+                                className={paymentMode === 'Cash' ? 'btn-primary' : 'btn-secondary'}
+                                style={{ height: '36px', fontSize: '0.8rem', gap: '6px' }}
+                            ><Wallet size={12} /> Cash</button>
+                            <button
+                                onClick={() => setPaymentMode('Card')}
+                                className={paymentMode === 'Card' ? 'btn-primary' : 'btn-secondary'}
+                                style={{ height: '36px', fontSize: '0.8rem', gap: '6px' }}
+                            ><CreditCard size={12} /> Card</button>
                         </div>
-                    </div>
 
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div className="input-group">
-                            <label>Payment Method</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div style={{ position: 'relative' }}>
+                            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '2px', display: 'block' }}>Received Cash</label>
+                            <span style={{ position: 'absolute', left: '10px', top: '22px', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.8rem' }}>Rs</span>
+                            <input
+                                type="number"
+                                className="input-field"
+                                style={{ paddingLeft: '32px', fontSize: '1.2rem', fontWeight: 'bold', height: '40px' }}
+                                value={receivedCash}
+                                onChange={e => setReceivedCash(parseFloat(e.target.value) || 0)}
+                            />
+                        </div>
+
+                        {/* Currency Note Shortcuts */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                            {[10, 20, 50, 100, 500, 1000, 5000].map(note => (
                                 <button
-                                    onClick={() => setPaymentMode('Cash')}
-                                    className={paymentMode === 'Cash' ? 'btn-primary' : 'btn-secondary'}
-                                    style={{ height: '44px' }}
-                                ><Wallet size={16} /> Cash</button>
-                                <button
-                                    onClick={() => setPaymentMode('Card')}
-                                    className={paymentMode === 'Card' ? 'btn-primary' : 'btn-secondary'}
-                                    style={{ height: '44px' }}
-                                ><CreditCard size={16} /> Card</button>
-                            </div>
-                            <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-                                <button
-                                    className="btn-secondary"
-                                    style={{ flex: 1, height: '40px' }}
-                                    onClick={() => handleHoldBill()}
-                                    disabled={cart.length === 0}
+                                    key={note}
+                                    onClick={() => setReceivedCash(prev => (prev || 0) + note)}
+                                    style={{
+                                        padding: '4px 2px',
+                                        fontSize: '0.65rem',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '4px',
+                                        color: 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.color = 'white'}
+                                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                                 >
-                                    <PauseCircle size={16} /> {activeHeldBillId ? 'Update Hold' : 'Hold Bill'}
+                                    +{note}
                                 </button>
-                            </div>
-                            <div style={{ marginTop: '8px' }}>
-                                <button
-                                    className="btn-secondary"
-                                    style={{ width: '100%', height: '40px' }}
-                                    onClick={() => { setShowInvoiceHistory(true); setHistoryTab('Final'); fetchInvoices(); }}
-                                >
-                                    <Receipt size={16} /> Recent Invoices (F6)
-                                </button>
-                            </div>
+                            ))}
+                            <button
+                                onClick={() => setReceivedCash(0)}
+                                style={{ padding: '4px 2px', fontSize: '0.65rem', background: 'rgba(248, 113, 113, 0.1)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '4px', color: '#f87171', cursor: 'pointer' }}
+                            >Clr</button>
                         </div>
 
-                        <div className="input-group">
-                            <label>Cash Received</label>
-                            <div style={{ position: 'relative' }}>
-                                <span style={{ position: 'absolute', left: '12px', top: '15px', color: 'var(--primary)', fontWeight: 'bold', fontSize: '1rem' }}>Rs</span>
-                                <input
-                                    type="number"
-                                    className="input-field"
-                                    style={{ paddingLeft: '40px', fontSize: '1.5rem', fontWeight: 'bold' }}
-                                    value={receivedCash}
-                                    onChange={e => setReceivedCash(parseFloat(e.target.value) || 0)}
-                                />
+                        <div style={{ padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid var(--border)', fontSize: '0.8rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Gross</span>
+                                <span>Rs. {grossTotal.toFixed(2)}</span>
                             </div>
-                        </div>
-
-                        <div style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Gross Amount</span>
-                                <span style={{ fontWeight: 'bold' }}>Rs. {grossTotal.toFixed(2)}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Adj</span>
+                                <span style={{ color: adjustment < 0 ? '#f87171' : '#34d399' }}>{adjustment < 0 ? '-' : '+'}Rs. {Math.abs(adjustment).toFixed(2)}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Adjustment</span>
-                                <span style={{ color: adjustment < 0 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>{adjustment < 0 ? '-' : '+'}Rs. {Math.abs(adjustment).toFixed(2)}</span>
-                            </div>
-                            <div style={{ height: '1px', background: 'var(--border)', margin: '12px 0' }} />
+                            <div style={{ height: '1px', background: 'var(--border)', margin: '6px 0' }} />
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: '1.1rem', fontWeight: '600' }}>Balance Change</span>
-                                <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#10b981' }}>Rs. {changeAmount.toFixed(2)}</span>
+                                <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>Balance/Change</span>
+                                <span style={{ fontSize: '1.2rem', fontWeight: '800', color: '#34d399' }}>Rs. {changeAmount.toFixed(2)}</span>
                             </div>
                         </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                        <button
+                            className="btn-secondary"
+                            style={{ flex: 1, height: '36px', fontSize: '0.75rem', gap: '6px' }}
+                            onClick={() => handleHoldBill()}
+                            disabled={cart.length === 0}
+                        >
+                            <PauseCircle size={12} /> {activeHeldBillId ? 'Update' : 'Hold'}
+                        </button>
+                        <button
+                            className="btn-secondary"
+                            style={{ flex: 1, height: '36px', fontSize: '0.75rem', gap: '6px' }}
+                            onClick={() => setShowAdjustmentModal(true)}
+                        >
+                            <Settings size={12} /> Adjustment
+                        </button>
                     </div>
 
                     <button
                         className="btn-primary"
-                        style={{ width: '100%', height: '70px', marginTop: '24px', fontSize: '1.25rem' }}
+                        style={{
+                            width: '100%',
+                            height: '56px',
+                            fontSize: '1.1rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '10px',
+                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
+                        }}
                         disabled={cart.length === 0 || (paymentMode === 'Cash' && receivedCash < netTotal - 0.01)}
                         onClick={handleCheckout}
                     >
                         {processing ? 'Processing...' : (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-                                <Check size={28} /> FINALIZE BILL
-                            </div>
+                            <>
+                                <Check size={24} /> FINALIZE BILL
+                            </>
                         )}
                     </button>
                 </div>
 
-                {/* Mode Toggles for quick config */}
-                <div className="glass-card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-around', gap: '8px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>SALE MODE</div>
-                        <button
-                            onClick={() => {
-                                const newMode = config.discountMode === 'Percent' ? 'Value' : 'Percent';
-                                setConfig(p => {
-                                    const next = { ...p, discountMode: newMode };
-                                    localStorage.setItem('pos_config', JSON.stringify(next));
-                                    return next;
-                                });
-                            }}
-                            style={{ padding: '4px 8px', fontSize: '0.7rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'transparent', color: 'white', cursor: 'pointer' }}
-                        >
-                            {config.discountMode}
-                        </button>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>UNIT LOAD</div>
-                        <button
-                            onClick={() => {
-                                const newUnit = config.defaultSaleUnit === 'Single' ? 'Pack' : 'Single';
-                                setConfig(p => {
-                                    const next = { ...p, defaultSaleUnit: newUnit };
-                                    localStorage.setItem('pos_config', JSON.stringify(next));
-                                    return next;
-                                });
-                            }}
-                            style={{ padding: '4px 8px', fontSize: '0.7rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'transparent', color: 'white', cursor: 'pointer' }}
-                        >
-                            {config.defaultSaleUnit}
-                        </button>
-                    </div>
-                </div>
             </div>
 
             {/* --- MODALS --- */}

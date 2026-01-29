@@ -1,19 +1,24 @@
-﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer, Banknote, CreditCard } from 'lucide-react';
+﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, ChevronRight, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer, Banknote, CreditCard, User, Bell, BarChart3, Monitor, Hash } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import ProductDefinition from './ProductDefinition';
 import NavDropdown from '../components/NavDropdown';
 import InventoryCRUDManager from './InventoryCRUDManager';
-import ProductList from './ProductList';
+import RolesManager from './RolesManager';
+import InventoryAdjustment from './InventoryAdjustment';
+import ProductManagement from './ProductManagement';
 import PurchaseOrder from './PurchaseOrder';
 import GRN from './GRN';
 import POS from './POS';
 import GeneralSettings from './GeneralSettings';
 import Reports from './Reports';
 import Payments from './Payments';
-import Stock from './Stock';
 import ChartOfAccounts from './ChartOfAccounts';
 import JournalEntries from './JournalEntries';
+import InventorySetup from './InventorySetup';
+import PaginationControls from '../components/PaginationControls';
+import { showSuccess, showError, showInfo } from '../utils/toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { API_BASE_URL } from '../services/api';
 
 
@@ -28,8 +33,72 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
     };
     const [productToEdit, setProductToEdit] = useState(null);
 
+    // Global Confirmation State for Dashboard Views
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: null,
+        confirmText: 'Confirm',
+        type: 'danger'
+    });
+
+    const openConfirm = (config) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: config.title || 'Confirm Action',
+            message: config.message || 'Are you sure?',
+            onConfirm: config.onConfirm,
+            confirmText: config.confirmText || 'Confirm',
+            type: config.type || 'danger'
+        });
+    };
+
+    const closeConfirm = () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+    };
+
     const [apiStatus, setApiStatus] = useState('Checking...');
     const [isSidebarOpen, setIsSidebarOpen] = useState(activeView !== 'POS');
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Sync fullscreen state with browser events
+    useEffect(() => {
+        const handleFSChange = () => {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            setIsFullscreen(isFS);
+        };
+        document.addEventListener('fullscreenchange', handleFSChange);
+        document.addEventListener('webkitfullscreenchange', handleFSChange);
+        document.addEventListener('mozfullscreenchange', handleFSChange);
+        document.addEventListener('MSFullscreenChange', handleFSChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFSChange);
+            document.removeEventListener('webkitfullscreenchange', handleFSChange);
+            document.removeEventListener('mozfullscreenchange', handleFSChange);
+            document.removeEventListener('MSFullscreenChange', handleFSChange);
+        };
+    }, []);
+
+    const toggleFullscreen = () => {
+        const element = document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+            const requestMethod = element.requestFullscreen || element.webkitRequestFullscreen || element.mozRequestFullScreen || element.msRequestFullscreen;
+            if (requestMethod) {
+                requestMethod.call(element).then(() => {
+                    setIsFullscreen(true);
+                }).catch(e => {
+                    console.error(`Error attempting to enable full-screen mode: ${e.message}`);
+                });
+            }
+        } else {
+            const exitMethod = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exitMethod) {
+                exitMethod.call(document);
+                setIsFullscreen(false);
+            }
+        }
+    };
 
     useEffect(() => {
         if (activeView === 'POS') {
@@ -158,18 +227,8 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                     items={[
                                         { view: 'ProductDefinition', label: 'Product Definition', icon: <Plus size={16} /> },
                                         { view: 'Products', label: 'Products', icon: <Package size={16} /> },
-                                        { view: 'Stock', label: 'Stock', icon: <Boxes size={16} /> },
-                                        { view: 'LineItems', label: 'Line Items', icon: <ListIcon size={16} /> },
-                                        { view: 'Categories', label: 'Categories', icon: <Tag size={16} /> },
-                                        { view: 'SubCategories', label: 'Sub Categories', icon: <Layers size={16} /> },
-                                        { view: 'ProductGroups', label: 'Product Groups', icon: <Boxes size={16} /> },
-                                        { view: 'CategoryGroups', label: 'Category Groups', icon: <Layers size={16} /> },
-                                        { view: 'Generics', label: 'Generics', icon: <Package size={16} /> },
-                                        { view: 'CalculateSeasons', label: 'Calculate Seasons', icon: <TrendingUp size={16} /> },
-                                        { view: 'Manufacturers', label: 'Manufacturers', icon: <Building2 size={16} /> },
-                                        { view: 'Racks', label: 'Racks', icon: <Warehouse size={16} /> },
-                                        { view: 'SuppliersInventory', label: 'Suppliers', icon: <Truck size={16} /> },
-                                        { view: 'PurchaseConversionUnits', label: 'Purchase Conversion Units', icon: <Scale size={16} /> },
+                                        { view: 'InventoryAdjustment', label: 'Stock Adjustment', icon: <Hash size={16} /> },
+                                        { view: 'InventorySetup', label: 'Data Setup', icon: <Settings size={16} /> },
                                     ]}
                                 />
                             )}
@@ -268,7 +327,7 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                             if (isSuperAdmin || userData.roles.includes('Admin') || userData.roles.includes('Manager')) {
                                 isSuperAdmin ? setActiveView('Tenants') : setActiveView('Staff');
                             } else {
-                                alert("Access Denied: Staff Profiles are for Admins only.");
+                                showError("Access Denied: Staff Profiles are for Admins only.");
                             }
                         }}
                     />
@@ -280,106 +339,182 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
             </div>
 
             {/* Main Content */}
-            <main style={{ flex: 1, padding: '40px', background: 'radial-gradient(circle at top right, #1e293b, #0f172a)', display: 'flex', flexDirection: 'column', minHeight: '100vh', width: isSidebarOpen ? 'calc(100% - 280px)' : '100%' }}>
-                <header style={{ marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            {!isSidebarOpen && (
-                                <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'white', padding: '8px', borderRadius: '8px', cursor: 'pointer', marginRight: '10px', display: 'flex', alignItems: 'center' }}>
-                                    <Menu size={20} />
+            <main style={{ flex: 1, background: 'radial-gradient(circle at top right, #1e293b, #0f172a)', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', width: isSidebarOpen ? 'calc(100% - 280px)' : '100%' }}>
+                <header style={{
+                    padding: '14px 40px',
+                    background: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.8))',
+                    backdropFilter: 'blur(32px)',
+                    borderBottom: '1px solid rgba(99, 102, 241, 0.4)',
+                    boxShadow: '0 4px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1000,
+                    transition: 'all 0.4s ease'
+                }}>
+                    {/* Left: Brand/Logo & Breadcrumbs */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        {!isSidebarOpen && (
+                            <button onClick={() => setIsSidebarOpen(true)} style={{
+                                background: 'linear-gradient(135deg, var(--primary), #818cf8)',
+                                border: 'none',
+                                color: 'white',
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 0 15px rgba(99, 102, 241, 0.4)'
+                            }}>
+                                <Menu size={20} />
+                            </button>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
+                                <span>Nexus OS</span>
+                                <ChevronRight size={10} />
+                                <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{activeView.replace(/([A-Z])/g, ' $1').trim()}</span>
+                            </div>
+                            <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '700', color: '#fff' }}>
+                                {activeView === 'Overview' ? 'Control Center' : activeView.replace(/([A-Z])/g, ' $1').trim()}
+                            </h2>
+                        </div>
+                    </div>
+
+                    {/* Center: Action Shortcuts Tooltray */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, justifyContent: 'center', margin: '0 40px' }}>
+                        <div style={{ display: 'flex', gap: '10px', background: 'rgba(255,255,255,0.03)', padding: '6px 12px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2)' }}>
+                            {[
+                                { view: 'POS', icon: <ShoppingCart size={20} />, label: 'Sale', tooltip: 'Launch POS (Ctrl+S)' },
+                                { view: 'Products', icon: <Package size={20} />, label: 'Stock', tooltip: 'Inventory Management' },
+                                { view: 'ProductDefinition', icon: <Plus size={20} />, label: 'Add', tooltip: 'Add New Product' },
+                                { view: 'Patients', icon: <UserPlus size={20} />, label: 'Patient', tooltip: 'Patient Registration' },
+                                { view: 'Analytics', icon: <BarChart3 size={20} />, label: 'Stats', tooltip: 'Performance Analytics' }
+                            ].map(btn => (
+                                <button
+                                    key={btn.view}
+                                    onClick={() => setActiveView(btn.view)}
+                                    data-tooltip={btn.tooltip}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '12px',
+                                        background: activeView === btn.view ? 'linear-gradient(135deg, var(--primary), var(--secondary))' : 'transparent',
+                                        border: 'none',
+                                        color: activeView === btn.view ? 'white' : 'rgba(255,255,255,0.6)',
+                                        cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        boxShadow: activeView === btn.view ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none'
+                                    }}
+                                >
+                                    {btn.icon}
+                                    <span>{btn.label}</span>
                                 </button>
-                            )}
-                            <h1 style={{ fontSize: '2.5rem', margin: 0, background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                {isSuperAdmin ? 'Global System' :
-                                    activeView === 'ProductDefinition' ? 'Product Definition' :
-                                        activeView === 'Products' ? 'Product Catalog' :
-                                            ['LineItems', 'Categories', 'SubCategories', 'ProductGroups', 'CategoryGroups', 'Generics', 'CalculateSeasons', 'Manufacturers', 'Racks', 'SuppliersInventory', 'PurchaseConversionUnits'].includes(activeView) ?
-                                                `Inventory - ${activeView.replace(/([A-Z])/g, ' $1').trim()}` :
-                                                activeView === 'Staff' ? 'Staff Management' :
-                                                    activeView === 'Inventory' ? 'Inventory Explorer' :
-                                                        activeView === 'POS' ? 'Retail POS Terminal' :
-                                                            activeView === 'PurchaseOrder' ? 'Procurement & Purchase Order' : 'Dashboard Hub'}
-                            </h1>
-                            {!isSuperAdmin && (
-                                <span style={{
-                                    padding: '4px 12px',
-                                    background: 'rgba(99, 102, 241, 0.1)',
-                                    color: '#818cf8',
-                                    borderRadius: '20px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: '600',
-                                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right: Notifications & Profile */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <button
+                                onClick={toggleFullscreen}
+                                data-tooltip={isFullscreen ? "Exit Big Screen (Esc)" : "Big Screen Mode (F11)"}
+                                style={{
+                                    background: isFullscreen ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                    border: isFullscreen ? '1px solid var(--primary)' : 'none',
+                                    color: isFullscreen ? 'var(--primary)' : 'rgba(255,255,255,0.4)',
+                                    cursor: 'pointer',
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '6px'
+                                    justifyContent: 'center',
+                                    transition: 'all 0.3s ease'
+                                }}
+                            >
+                                <Monitor size={20} />
+                            </button>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+                            <button style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', position: 'relative' }}>
+                                <Bell size={20} />
+                                <div style={{ position: 'absolute', top: 0, right: 0, width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', border: '2px solid #0f172a' }} />
+                            </button>
+                            <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#fff' }}>{userData.username}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--primary)', fontWeight: '700', textTransform: 'uppercase' }}>{userData.roles[0]}</div>
+                                </div>
+                                <div style={{
+                                    width: '38px', height: '38px', borderRadius: '12px',
+                                    background: 'linear-gradient(135deg, #334155, #0f172a)',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
-                                    <Database size={12} />
-                                    {userData.schema}
-                                </span>
-                            )}
+                                    <User size={20} color="rgba(255,255,255,0.7)" />
+                                </div>
+                            </div>
                         </div>
-                        <p style={{ color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            Welcome back, <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{userData.username}</span>.
-                            {isSuperAdmin ? ' Managing enterprise tenants.' : ` Acting as ${userData.roles.join(', ')}`}
-                            <span style={{
-                                marginLeft: '12px',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                fontSize: '0.65rem',
-                                background: apiStatus === 'Operational' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                color: apiStatus === 'Operational' ? '#10b981' : '#ef4444',
-                                border: `1px solid ${apiStatus === 'Operational' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
-                            }}>
-                                API: {apiStatus}
-                            </span>
-                        </p>
                     </div>
                 </header>
 
-                {isSuperAdmin ? (
-                    activeView === 'Overview' ? <TenantManager /> : <TenantList />
-                ) : (
-                    activeView === 'Staff' ? <StaffManager tenantId={tenant} currentUser={userData} /> :
-                        activeView === 'Inventory' ? <InventoryManager tenantId={tenant} /> :
-                            activeView === 'ProductDefinition' ? <ProductDefinition tenantId={tenant} initialData={productToEdit} /> :
-                                activeView === 'Products' ? <ProductList tenantId={tenant} onEdit={(p) => {
-                                    setProductToEdit(p);
-                                    navigate('/dashboard/ProductDefinition');
-                                }} /> :
-                                    activeView === 'Stock' ? <Stock tenant={tenant} /> :
-                                        activeView === 'LineItems' ? <InventoryCRUDManager tenantId={tenant} entity="line-items" entityName="Line Items" /> :
-                                            activeView === 'Categories' ? <InventoryCRUDManager tenantId={tenant} entity="categories" entityName="Categories" /> :
-                                                activeView === 'SubCategories' ? <InventoryCRUDManager tenantId={tenant} entity="sub-categories" entityName="Sub Categories" /> :
-                                                    activeView === 'ProductGroups' ? <InventoryCRUDManager tenantId={tenant} entity="product-groups" entityName="Product Groups" /> :
-                                                        activeView === 'CategoryGroups' ? <InventoryCRUDManager tenantId={tenant} entity="category-groups" entityName="Category Groups" /> :
-                                                            activeView === 'Generics' ? <InventoryCRUDManager tenantId={tenant} entity="generics" entityName="Generics" /> :
-                                                                activeView === 'CalculateSeasons' ? <InventoryCRUDManager tenantId={tenant} entity="calculate-seasons" entityName="Calculate Seasons" /> :
-                                                                    activeView === 'Manufacturers' ? <InventoryCRUDManager tenantId={tenant} entity="manufacturers" entityName="Manufacturers" /> :
-                                                                        activeView === 'Racks' ? <InventoryCRUDManager tenantId={tenant} entity="racks" entityName="Racks" /> :
-                                                                            activeView === 'SuppliersInventory' ? <InventoryCRUDManager tenantId={tenant} entity="suppliers" entityName="Suppliers" /> :
-                                                                                activeView === 'PurchaseConversionUnits' ? <InventoryCRUDManager tenantId={tenant} entity="purchase-conversion-units" entityName="Purchase Conversion Units" /> :
-                                                                                    activeView === 'POS' ? <POS tenantId={tenant} /> :
-                                                                                        activeView === 'Invoices' ? <SalesHistory tenantId={tenant} /> :
-                                                                                            activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
-                                                                                                activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
-                                                                                                    activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
-                                                                                                        activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
-                                                                                                            activeView === 'GRN' ? <GRN tenantId={tenant} /> :
-                                                                                                                activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
-                                                                                                                    activeView === 'Reports' ? <Reports /> :
-                                                                                                                        activeView === 'ChartOfAccounts' ? <ChartOfAccounts tenant={tenant} /> :
-                                                                                                                            activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
-                                                                                                                                activeView === 'Payments' ? <Payments tenantId={tenant} /> :
-                                                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
-                                                                                                                                        <DashboardOverview tenantId={tenant} />
-                )}
+                <div style={{ padding: isFullscreen ? '16px' : '32px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', paddingRight: '8px' }}>
+                        {isSuperAdmin ? (
+                            activeView === 'Overview' ? <TenantManager /> : <TenantList openConfirm={openConfirm} />
+                        ) : (
+                            activeView === 'Staff' ? <StaffManager tenantId={tenant} currentUser={userData} openConfirm={openConfirm} /> :
+                                activeView === 'Inventory' ? <InventoryManager tenantId={tenant} /> :
+                                    activeView === 'ProductDefinition' ? <ProductDefinition
+                                        tenantId={tenant}
+                                        initialData={productToEdit}
+                                        onSaveSuccess={() => setActiveView('Products')}
+                                    /> :
+                                        activeView === 'Products' ? <ProductManagement tenantId={tenant} onEdit={(p) => {
+                                            setProductToEdit(p);
+                                            navigate('/dashboard/ProductDefinition');
+                                        }} /> :
+                                            activeView === 'InventorySetup' ? <InventorySetup tenantId={tenant} /> :
+                                                activeView === 'InventoryAdjustment' ? <InventoryAdjustment tenantId={tenant} /> :
+                                                    activeView === 'POS' ? <POS tenantId={tenant} /> :
+                                                        activeView === 'Invoices' ? <SalesHistory tenantId={tenant} /> :
+                                                            activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
+                                                                activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
+                                                                    activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
+                                                                        activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
+                                                                            activeView === 'GRN' ? <GRN tenantId={tenant} /> :
+                                                                                activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
+                                                                                    activeView === 'Reports' ? <Reports /> :
+                                                                                        activeView === 'ChartOfAccounts' ? <ChartOfAccounts tenant={tenant} /> :
+                                                                                            activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
+                                                                                                activeView === 'Payments' ? <Payments tenantId={tenant} /> :
+                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
+                                                                                                        <DashboardOverview tenantId={tenant} />
+                        )}
+                    </div>
+                    <footer style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <div>&copy; {new Date().getFullYear()} {tenant ? tenant.toUpperCase() : 'ANTIGRAVITY'} PHARMA. All rights reserved.</div>
+                        <div>System v2.5.0 | Support: help@antigravity.dev</div>
+                    </footer>
+                </div>
 
-                <footer style={{ marginTop: 'auto', paddingTop: '40px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
-                    <div>&copy; {new Date().getFullYear()} {tenant ? tenant.toUpperCase() : 'ANTIGRAVITY'} PHARMA. All rights reserved.</div>
-                    <div>System v2.5.0 | Support: help@antigravity.dev</div>
-                </footer>
+
             </main>
-        </div>
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                onClose={closeConfirm}
+                onConfirm={confirmDialog.onConfirm}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                confirmText={confirmDialog.confirmText}
+                type={confirmDialog.type}
+            />
+        </div >
     );
 };
 
@@ -470,7 +605,7 @@ const DashboardOverview = ({ tenantId }) => {
     );
 }
 
-const StaffManager = ({ tenantId, currentUser }) => {
+const StaffManager = ({ tenantId, currentUser, openConfirm }) => {
     const [subView, setSubView] = useState('list'); // list, add, edit
     const [editingUser, setEditingUser] = useState(null);
     const [roles, setRoles] = useState([]);
@@ -536,10 +671,33 @@ const StaffManager = ({ tenantId, currentUser }) => {
                 >
                     <UserPlus size={18} /> Add Staff
                 </button>
+                <button
+                    onClick={() => setSubView('roles')}
+                    className={`btn-primary ${subView !== 'roles' ? 'btn-secondary' : ''}`}
+                    style={{ background: subView === 'roles' ? 'var(--primary)' : 'rgba(255,255,255,0.05)', padding: '10px 20px' }}
+                >
+                    <ShieldCheck size={18} /> Manage Roles
+                </button>
             </div>
 
+            {subView === 'roles' && (
+                <RolesManager
+                    tenantId={tenantId}
+                    currentUser={currentUser}
+                    onBack={() => { setSubView('list'); fetchRoles(); }}
+                />
+            )}
+
             {subView === 'list' && (
-                <StaffList users={users} loading={loading} onEdit={startEdit} onDelete={fetchUsers} tenantId={tenantId} currentUser={currentUser} />
+                <StaffList
+                    users={users}
+                    loading={loading}
+                    onEdit={startEdit}
+                    onDelete={fetchUsers}
+                    tenantId={tenantId}
+                    currentUser={currentUser}
+                    openConfirm={openConfirm}
+                />
             )}
 
             {(subView === 'add' || subView === 'edit') && (
@@ -555,27 +713,38 @@ const StaffManager = ({ tenantId, currentUser }) => {
     );
 }
 
-const StaffList = ({ users, loading, onEdit, onDelete, tenantId, currentUser }) => {
+const StaffList = ({ users, loading, onEdit, onDelete, tenantId, currentUser, openConfirm }) => {
     const handleDelete = async (id, targetIsAdmin) => {
         if (targetIsAdmin && id !== currentUser.id) {
-            alert("Administrative accounts can only be modified/deleted by the user themselves.");
+            showError("Administrative accounts can only be modified/deleted by the user themselves.");
             return;
         }
-        if (!window.confirm("Delete this staff member?")) return;
-        try {
-            const res = await fetch(`${API_BASE_URL}/users/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'X-Tenant-ID': tenantId
+
+        openConfirm({
+            title: 'Delete Staff Member',
+            message: 'Are you sure you want to remove this staff member? This will revoke all their access across the system.',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                            'X-Tenant-ID': tenantId
+                        }
+                    });
+                    if (res.ok) onDelete();
+                    else {
+                        const err = await res.json();
+                        showError(err.detail);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showError("An error occurred while deleting staff member");
                 }
-            });
-            if (res.ok) onDelete();
-            else {
-                const err = await res.json();
-                alert(err.detail);
-            }
-        } catch (err) { console.error(err); }
+            },
+            confirmText: 'Delete Staff',
+            type: 'danger'
+        });
     };
 
     return (
@@ -787,6 +956,10 @@ const SalesHistory = ({ tenantId }) => {
     const [settings, setSettings] = useState({});
     const [filters, setFilters] = useState({ start: '', end: '', status: 'All' });
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
+
     useEffect(() => {
         fetchInvoices();
         fetchSettings();
@@ -914,8 +1087,8 @@ const SalesHistory = ({ tenantId }) => {
     };
 
     return (
-        <div className="fade-in">
-            <div className="glass-card">
+        <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                     <h3 style={{ margin: 0 }}>Sales Invoice History</h3>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -943,46 +1116,60 @@ const SalesHistory = ({ tenantId }) => {
                         )}
                     </div>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
-                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Invoice #</th>
-                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Date & Time</th>
-                                <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Items</th>
-                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right' }}>Total Amount</th>
-                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right' }}>Action</th>
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                            <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', background: 'var(--surface)' }}>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', background: 'var(--surface)' }}>Invoice #</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', background: 'var(--surface)' }}>Date & Time</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', background: 'var(--surface)' }}>Items</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right', background: 'var(--surface)' }}>Total Amount</th>
+                                <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right', background: 'var(--surface)' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center' }}>Loading...</td></tr>
-                            ) : invoices.map(inv => (
-                                <tr key={inv.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '16px', fontWeight: 'bold' }}>
-                                        {inv.invoice_number}
-                                        {inv.status === 'Hold' && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#f59e0b', color: 'black', padding: '2px 6px', borderRadius: '4px' }}>HELD</span>}
-                                    </td>
-                                    <td style={{ padding: '16px', color: 'var(--text-secondary)' }}>
-                                        {new Date(inv.created_at).toLocaleString()}
-                                    </td>
-                                    <td style={{ padding: '16px' }}>{inv.items.length} items</td>
-                                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold' }}>
-                                        PKR {inv.net_total.toFixed(2)}
-                                    </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
-                                        <button
-                                            onClick={() => printReceipt(inv)}
-                                            style={{ background: 'transparent', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                        >
-                                            <Printer size={16} /> Print
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            ) : invoices
+                                .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                                .map(inv => (
+                                    <tr key={inv.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                        <td style={{ padding: '16px', fontWeight: 'bold' }}>
+                                            {inv.invoice_number}
+                                            {inv.status === 'Hold' && <span style={{ marginLeft: '8px', fontSize: '0.7rem', background: '#f59e0b', color: 'black', padding: '2px 6px', borderRadius: '4px' }}>HELD</span>}
+                                        </td>
+                                        <td style={{ padding: '16px', color: 'var(--text-secondary)' }}>
+                                            {new Date(inv.created_at).toLocaleString()}
+                                        </td>
+                                        <td style={{ padding: '16px' }}>{inv.items.length} items</td>
+                                        <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold' }}>
+                                            PKR {inv.net_total.toFixed(2)}
+                                        </td>
+                                        <td style={{ padding: '16px', textAlign: 'right' }}>
+                                            <button
+                                                onClick={() => printReceipt(inv)}
+                                                style={{ background: 'transparent', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                            >
+                                                <Printer size={16} /> Print
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
                         </tbody>
                     </table>
                 </div>
+
+                <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(invoices.length / pageSize)}
+                    pageSize={pageSize}
+                    totalItems={invoices.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
             </div>
         </div>
     );
@@ -1080,7 +1267,7 @@ const TenantManager = () => {
     );
 };
 
-const TenantList = () => {
+const TenantList = ({ openConfirm }) => {
     const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -1097,14 +1284,21 @@ const TenantList = () => {
     useEffect(() => { fetchTenants(); }, []);
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Remove this pharmacy?")) return;
-        try {
-            await fetch(`${API_BASE_URL}/tenants/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-            });
-            fetchTenants();
-        } catch (err) { console.error(err); }
+        openConfirm({
+            title: 'Remove Pharmacy',
+            message: 'Are you sure you want to remove this pharmacy? This will delete all associated data and cannot be undone.',
+            onConfirm: async () => {
+                try {
+                    await fetch(`${API_BASE_URL}/tenants/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    fetchTenants();
+                } catch (err) { console.error(err); }
+            },
+            confirmText: 'Remove Pharmacy',
+            type: 'danger'
+        });
     };
 
     return (
@@ -1295,9 +1489,17 @@ const StoreManager = ({ tenantId }) => {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
             });
-            if (res.ok) { alert("Transfer Successful"); fetchData(); }
-            else { const err = await res.json(); alert(err.detail); }
-        } catch (e) { alert("Failed"); }
+            if (res.ok) {
+                showSuccess("Transfer Successful");
+                fetchData();
+            }
+            else {
+                const err = await res.json();
+                showError(err.detail);
+            }
+        } catch (e) {
+            showError("Transfer failed");
+        }
     };
 
     return (
@@ -1377,8 +1579,17 @@ const SupplierManager = ({ tenantId }) => {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
             });
-            if (res.ok) { setShowAdd(false); fetchData(); }
-        } catch (e) { alert("Fail"); }
+            if (res.ok) {
+                showSuccess("Supplier added successfully");
+                setShowAdd(false);
+                fetchData();
+            } else {
+                const err = await res.json();
+                showError(err.detail || "Failed to add supplier");
+            }
+        } catch (e) {
+            showError("Failed to add supplier");
+        }
     };
 
     return (

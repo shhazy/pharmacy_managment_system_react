@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Banknote, Plus, Search, Filter, Calendar, CreditCard, User, FileText, ChevronRight, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
+import PaginationControls from '../components/PaginationControls';
+import { showSuccess, showError } from '../utils/toast';
 
 const Payments = () => {
     const [payments, setPayments] = useState([]);
@@ -11,6 +13,10 @@ const Payments = () => {
     const [filterSupplier, setFilterSupplier] = useState('');
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
 
     const [form, setForm] = useState({
         payment_date: new Date().toISOString().split('T')[0],
@@ -107,17 +113,19 @@ const Payments = () => {
                     account_id: accounts[0]?.id || '',
                     description: ''
                 });
+                showSuccess("Payment Recorded Successfully");
             } else {
                 const err = await res.json();
-                alert(`Error: ${err.detail || 'Failed to save payment'}`);
+                showError(`Error: ${err.detail || 'Failed to save payment'}`);
             }
         } catch (err) {
             console.error("Failed to save payment", err);
+            showError("Failed to save payment");
         }
     };
 
     return (
-        <div className="fade-in p-6" style={{ background: 'var(--background)', minHeight: '100%' }}>
+        <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '24px', overflow: 'hidden' }}>
             {/* Header Area */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -172,12 +180,12 @@ const Payments = () => {
                 </button>
             </div>
 
-            {/* Payments Table */}
-            <div className="glass-card overflow-hidden">
-                <div className="overflow-x-auto">
+            {/* Payments Table Area */}
+            <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
                     <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider">
+                        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                            <tr className="text-slate-400 text-xs uppercase tracking-wider" style={{ background: 'var(--surface)' }}>
                                 <th className="px-6 py-4 font-semibold">Voucher #</th>
                                 <th className="px-6 py-4 font-semibold">Date</th>
                                 <th className="px-6 py-4 font-semibold">Payee (Supplier)</th>
@@ -198,49 +206,63 @@ const Payments = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                payments.map((p) => (
-                                    <tr key={p.id} className="hover:bg-slate-800/20 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <span className="text-white font-mono font-medium">{p.voucher_number}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-300">
-                                            {new Date(p.payment_date).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-bold text-xs">
-                                                    {p.payee_type === 'Supplier' ? 'S' : 'O'}
+                                payments
+                                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                                    .map((p) => (
+                                        <tr key={p.id} className="hover:bg-slate-800/20 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <span className="text-white font-mono font-medium">{p.voucher_number}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-300">
+                                                {new Date(p.payment_date).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-bold text-xs">
+                                                        {p.payee_type === 'Supplier' ? 'S' : 'O'}
+                                                    </div>
+                                                    <span className="text-white">
+                                                        {suppliers.find(s => s.id === p.payee_id)?.name || `ID: ${p.payee_id}`}
+                                                    </span>
                                                 </div>
-                                                <span className="text-white">
-                                                    {suppliers.find(s => s.id === p.payee_id)?.name || `ID: ${p.payee_id}`}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-300 border border-slate-700">
+                                                    {p.payment_method}
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-300 border border-slate-700">
-                                                {p.payment_method}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-400 text-sm">
-                                            {accounts.find(a => a.id === p.account_id)?.account_name || 'Asset Account'}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <span className="text-lg font-bold text-white">
-                                                Rs. {parseFloat(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <div className="flex justify-center items-center gap-1 text-green-400 text-xs">
-                                                <CheckCircle2 size={14} />
-                                                Posted
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-400 text-sm">
+                                                {accounts.find(a => a.id === p.account_id)?.account_name || 'Asset Account'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-lg font-bold text-white">
+                                                    Rs. {parseFloat(p.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex justify-center items-center gap-1 text-green-400 text-xs">
+                                                    <CheckCircle2 size={14} />
+                                                    Posted
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(payments.length / pageSize)}
+                    pageSize={pageSize}
+                    totalItems={payments.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
             </div>
 
             {/* New Payment Modal */}

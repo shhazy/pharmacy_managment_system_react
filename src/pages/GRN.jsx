@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Printer, Plus, Trash2, Search, ArrowLeft, Download, Upload } from 'lucide-react';
-import { procurementAPI, inventoryAPI, medicineAPI, inventoryCRUDAPI } from '../services/api';
+import { Save, Printer, Plus, Trash2, Search, ArrowLeft, Download, Upload, ChevronDown, ChevronUp, ChevronRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { procurementAPI, inventoryAPI, medicineAPI, inventoryCRUDAPI, appSettingsAPI } from '../services/api';
+import { showSuccess, showError, showInfo } from '../utils/toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import PaginationControls from '../components/PaginationControls';
 
 const GRN = ({ tenantId }) => {
     const [activeTab, setActiveTab] = useState('GRN'); // GRN or Records
@@ -44,6 +47,9 @@ const GRN = ({ tenantId }) => {
         netTotal: 0
     });
 
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [showFOC, setShowFOC] = useState(false);
+
     // --- Handlers ---
     const handleSearchInput = async (val) => {
         setSearchQuery(val);
@@ -62,25 +68,30 @@ const GRN = ({ tenantId }) => {
     const addProduct = (prod) => {
         // Check if already added
         if (items.find(i => i.productId === prod.id)) {
-            alert("Product already in list");
+            showInfo("Product already in list");
             return;
         }
 
-        const factor = 1;
+        const shouldBeBulk = prod.preferred_purchase_unit_id && prod.preferred_purchase_unit_id == prod.purchase_conv_unit_id;
+        const initialUnitType = shouldBeBulk ? 'bulk' : 'base';
+        const initialFactor = shouldBeBulk ? (prod.purchase_conv_factor || 1) : 1;
+
         const newItem = {
             id: Date.now(),
             productId: prod.id,
             code: prod.product_code || 'N/A',
             name: prod.product_name,
             unit: prod.uom || 'Unit',
-            selected_unit_type: 'base',
+            selected_unit_type: initialUnitType,
             purchase_conv_unit_id: prod.purchase_conv_unit_id,
+            purchase_conv_unit_name: prod.purchase_conv_unit_name, // Store the name
             purchase_conv_factor: prod.purchase_conv_factor || 1,
-            factor: 1,
+            factor: initialFactor,
             retailPrice: prod.retail_price || 0,
             unitCost: prod.average_cost || 0,
             totalAmount: 0,
             quantity: 1,
+            focQuantity: 0,
             batchNo: '',
             expiryDate: ''
         };
@@ -100,9 +111,11 @@ const GRN = ({ tenantId }) => {
                     inventoryCRUDAPI.list('purchase-conversion-units', tenantId)
                 ]);
                 setSuppliers(supData);
-                setConversionUnits(unitData);
+                // Handle both array and object responses
+                setConversionUnits(Array.isArray(unitData) ? unitData : (unitData?.data || []));
             } catch (err) {
                 console.error("Failed to load initial data", err);
+                setConversionUnits([]); // Fallback to empty array
             }
         };
         loadInitialData();
@@ -136,11 +149,11 @@ const GRN = ({ tenantId }) => {
             setLoading(true);
             setLoading(true);
             // Use backend filtering
-            const relevantPOs = await procurementAPI.getPurchaseOrders(tenantId, {
+            const response = await procurementAPI.getPurchaseOrders(tenantId, {
                 supplier_id: supplierId,
                 status: 'Finalized'
             });
-            setPendingPOs(relevantPOs);
+            setPendingPOs(response.items || []);
         } catch (err) {
             console.error("Failed to load POs", err);
         } finally {
@@ -165,15 +178,17 @@ const GRN = ({ tenantId }) => {
                         productId: pi.product_id,
                         code: pi.product?.product_code || 'N/A',
                         name: pi.product?.product_name || `Product ${pi.product_id}`,
-                        unit: pi.product?.uom || 'N/A',
+                        unit: pi.product?.uom || 'Unit',
                         selected_unit_type: selectedType,
                         purchase_conv_unit_id: pi.product?.purchase_conv_unit_id,
+                        purchase_conv_unit_name: pi.product?.purchase_conv_unit_name, // Store name
                         purchase_conv_factor: pi.product?.purchase_conv_factor || 1,
                         factor: factor,
                         retailPrice: pi.product?.retail_price || 0,
                         unitCost: pi.unit_cost,
                         totalAmount: pi.total_cost,
                         quantity: displayQty,
+                        focQuantity: 0,
                         batchNo: '',
                         expiryDate: ''
                     };
@@ -190,31 +205,83 @@ const GRN = ({ tenantId }) => {
         }
     };
 
+    // --- Header Collapse State ---
+    const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+
     // --- Records State ---
     const [records, setRecords] = useState([]);
+    const [recordsLoading, setRecordsLoading] = useState(false);
     const [recordFilters, setRecordFilters] = useState({
         supplier: '',
         startDate: '',
         endDate: ''
     });
 
+    // Pagination & Search for Records
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [totalItems, setTotalItems] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        const initSettings = async () => {
+            try {
+                const settings = await appSettingsAPI.get(tenantId);
+                if (settings && settings.default_listing_rows) {
+                    setPageSize(settings.default_listing_rows);
+                }
+            } catch (error) {
+                console.error('Error fetching app settings:', error);
+            }
+        };
+        initSettings();
+    }, [tenantId]);
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ column }) => {
+        if (sortConfig.key !== column) return <ChevronDown size={14} style={{ opacity: 0.1, marginLeft: '4px' }} />;
+        return sortConfig.direction === 'asc' ?
+            <ChevronUp size={14} style={{ color: 'var(--primary)', marginLeft: '4px' }} /> :
+            <ChevronDown size={14} style={{ color: 'var(--primary)', marginLeft: '4px' }} />;
+    };
+
     // --- Handlers ---
     const handleCancel = () => {
-        if (items.length > 0 && !window.confirm("Are you sure you want to clear the form?")) return;
-        setItems([]);
-        setHeader({
-            invoiceNo: '',
-            invoiceDate: new Date().toISOString().split('T')[0],
-            batchNo: '',
-            dueDate: new Date().toISOString().split('T')[0],
-            billNo: '',
-            billDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cash',
-            comments: ''
-        });
-        setSelectedSupplier('');
-        setSelectedPO('');
-        setPendingPOs([]);
+        if (items.length > 0) {
+            setIsConfirmOpen(true);
+        } else {
+            setItems([]);
+            setHeader({
+                invoiceNo: '',
+                invoiceDate: new Date().toISOString().split('T')[0],
+                batchNo: '',
+                dueDate: new Date().toISOString().split('T')[0],
+                billNo: '',
+                billDate: new Date().toISOString().split('T')[0],
+                paymentMode: 'Cash',
+                comments: ''
+            });
+            setSelectedSupplier('');
+            setSelectedPO('');
+            setPendingPOs([]);
+        }
     };
 
     const handlePrint = () => {
@@ -222,27 +289,41 @@ const GRN = ({ tenantId }) => {
     };
 
     // --- Effects & Calculations ---
+    const fetchRecords = async () => {
+        setRecordsLoading(true);
+        try {
+            const rawParams = {
+                page: currentPage,
+                page_size: pageSize,
+                search: debouncedSearchTerm,
+                sort_by: sortConfig.key,
+                order: sortConfig.direction,
+                supplier_id: recordFilters.supplier || undefined,
+                start_date: recordFilters.startDate ? new Date(recordFilters.startDate).toISOString() : undefined,
+                end_date: recordFilters.endDate ? new Date(recordFilters.endDate).toISOString() : undefined
+            };
+
+            const params = Object.fromEntries(
+                Object.entries(rawParams).filter(([_, v]) => v != null && v !== '')
+            );
+
+            const data = await procurementAPI.getGRNs(tenantId, params);
+            setRecords(data.items || []);
+            setTotalItems(data.total || 0);
+            setTotalPages(data.total_pages || 0);
+        } catch (err) {
+            console.error("Error fetching GRNs", err);
+            showError("Failed to load records");
+        } finally {
+            setRecordsLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (activeTab === 'Records') {
-            const fetchRecords = async () => {
-                setLoading(true);
-                try {
-                    const params = {};
-                    if (recordFilters.supplier) params.supplier_id = recordFilters.supplier;
-                    if (recordFilters.startDate) params.start_date = new Date(recordFilters.startDate).toISOString();
-                    if (recordFilters.endDate) params.end_date = new Date(recordFilters.endDate).toISOString();
-
-                    const data = await procurementAPI.getGRNs(tenantId, params);
-                    setRecords(data);
-                } catch (err) {
-                    console.error("Error fetching GRNs", err);
-                } finally {
-                    setLoading(false);
-                }
-            };
             fetchRecords();
         }
-    }, [activeTab, recordFilters, tenantId]);
+    }, [activeTab, currentPage, pageSize, debouncedSearchTerm, sortConfig, recordFilters]);
 
     useEffect(() => {
         calculateFinancials();
@@ -269,8 +350,9 @@ const GRN = ({ tenantId }) => {
         setItems(prev => prev.map(item => {
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
-                if (field === 'quantity' || field === 'unitCost' || field === 'factor') {
+                if (field === 'quantity' || field === 'unitCost' || field === 'factor' || field === 'focQuantity') {
                     // Total Amount = Cost (per base unit) * Selection Qty * Factor
+                    // FOC quantity does not contribute to the total amount (as it's free)
                     updated.totalAmount = parseFloat(updated.unitCost || 0) * (parseFloat(updated.quantity || 0) * (updated.factor || 1));
                 }
                 return updated;
@@ -281,7 +363,7 @@ const GRN = ({ tenantId }) => {
 
     const handleSave = async () => {
         if (!items.length) {
-            alert("No items to receive.");
+            showError("No items to receive.");
             return;
         }
 
@@ -309,7 +391,8 @@ const GRN = ({ tenantId }) => {
                     batch_no: item.batchNo || 'DEFAULT',
                     expiry_date: item.expiryDate ? new Date(item.expiryDate).toISOString() : new Date().toISOString(),
                     pack_size: 1, // Defaulting to 1 as we use factor now
-                    quantity: parseInt(item.quantity * item.factor) || 0,
+                    quantity: parseInt(parseFloat(item.quantity || 0) * item.factor) || 0,
+                    foc_quantity: parseInt(parseFloat(item.focQuantity || 0) * item.factor) || 0,
                     unit_cost: parseFloat(item.unitCost) || 0,
                     total_cost: parseFloat(item.totalAmount) || 0,
                     retail_price: parseFloat(item.retailPrice) || 0,
@@ -322,7 +405,7 @@ const GRN = ({ tenantId }) => {
 
             // PO Status update is handled by backend if po_id is sent
 
-            alert("GRN Saved successfully!");
+            showSuccess("GRN Saved successfully!");
 
             // Reset
             setItems([]);
@@ -341,7 +424,7 @@ const GRN = ({ tenantId }) => {
 
         } catch (err) {
             console.error("Error saving GRN", err);
-            alert("Failed to save GRN. Check console for details.");
+            showError("Failed to save GRN. Check console for details.");
         } finally {
             setLoading(false);
         }
@@ -387,105 +470,137 @@ const GRN = ({ tenantId }) => {
 
             {activeTab === 'GRN' ? (
                 <>
-                    {/* Header controls */}
-                    <div className="glass-card" style={{ padding: '16px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                    {/* Header controls - Overflow visible needed for search dropdown */}
+                    <div className="glass-card" style={{ padding: '16px', overflow: 'visible', zIndex: 50, position: 'relative' }}>
 
-                            {/* Column 1: Supplier & Batch */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div>
-                                    <span style={LabelStyle}>Supplier</span>
-                                    <select
-                                        style={InputParams.style}
-                                        value={selectedSupplier}
-                                        onChange={e => handleSupplierChange(e.target.value)}
-                                    >
-                                        <option value="">Select Supplier</option>
-                                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>Internal Batch No</span>
-                                    <input type="text" style={InputParams.style} value={header.batchNo} readOnly />
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>GRN Date</span>
-                                    <input type="date" style={InputParams.style} value={header.invoiceDate} onChange={e => setHeader({ ...header, invoiceDate: e.target.value })} />
-                                </div>
-                            </div>
-
-                            {/* Column 2: Invoice Info */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div>
-                                    <span style={LabelStyle}>Invoice No</span>
-                                    <input
-                                        type="text"
-                                        style={{ ...InputParams.style, background: '#fffbeb', color: '#000' }} // Yellow bg from screenshot
-                                        value={header.invoiceNo}
-                                        onChange={e => setHeader({ ...header, invoiceNo: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>Due Date</span>
-                                    <input type="date" style={InputParams.style} value={header.dueDate} onChange={e => setHeader({ ...header, dueDate: e.target.value })} />
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>Payment Mode</span>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', height: '30px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="radio" name="paymode" checked={header.paymentMode === 'Cash'} onChange={() => setHeader({ ...header, paymentMode: 'Cash' })} /> Cash
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.9rem', cursor: 'pointer' }}>
-                                            <input type="radio" name="paymode" checked={header.paymentMode === 'Credit'} onChange={() => setHeader({ ...header, paymentMode: 'Credit' })} /> Credit
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Column 3: Bill Info & Comments */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div>
-                                    <span style={LabelStyle}>Bill No</span>
-                                    <input type="text" style={InputParams.style} value={header.billNo} onChange={e => setHeader({ ...header, billNo: e.target.value })} />
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>Bill Date</span>
-                                    <input type="date" style={InputParams.style} value={header.billDate} onChange={e => setHeader({ ...header, billDate: e.target.value })} />
-                                </div>
-                                <div>
-                                    <span style={LabelStyle}>Comments</span>
-                                    <textarea
-                                        style={{ ...InputParams.style, resize: 'none', height: '32px' }}
-                                        value={header.comments}
-                                        onChange={e => setHeader({ ...header, comments: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Column 4: Financial Summary */}
-                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Inv Amount:</span>
-                                    <input type="number" readOnly style={{ ...InputParams.style, textAlign: 'right', background: 'var(--surface)' }} value={financials.invoiceAmount.toFixed(2)} />
-
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Load/Freight:</span>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <input type="number" placeholder="Load" style={{ ...InputParams.style, width: '50%' }} value={financials.loadingExp} onChange={e => setFinancials({ ...financials, loadingExp: e.target.value })} />
-                                        <input type="number" placeholder="Frgt" style={{ ...InputParams.style, width: '50%' }} value={financials.freightExp} onChange={e => setFinancials({ ...financials, freightExp: e.target.value })} />
-                                    </div>
-
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Tax/Disc:</span>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <input type="number" placeholder="Tax" style={{ ...InputParams.style, width: '50%' }} value={financials.purchaseTax} onChange={e => setFinancials({ ...financials, purchaseTax: e.target.value })} />
-                                        <input type="number" placeholder="Disc" style={{ ...InputParams.style, width: '50%' }} value={financials.discount} onChange={e => setFinancials({ ...financials, discount: e.target.value })} />
-                                    </div>
-
-                                    <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>Net Pay:</span>
-                                    <input type="number" readOnly style={{ ...InputParams.style, textAlign: 'right', fontWeight: 'bold', color: 'white', background: 'var(--primary)' }} value={financials.netTotal.toFixed(2)} />
-                                </div>
-                            </div>
-
+                        {/* Collapse Toggle */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: isHeaderExpanded ? '16px' : '0' }}>
+                            <button
+                                onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                            >
+                                {isHeaderExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                {isHeaderExpanded ? 'Collapse Header' : 'Expand Header'}
+                            </button>
                         </div>
+
+                        {isHeaderExpanded ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+
+                                {/* Column 1: Supplier & Batch */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div>
+                                        <span style={LabelStyle}>Supplier</span>
+                                        <select
+                                            style={InputParams.style}
+                                            value={selectedSupplier}
+                                            onChange={e => handleSupplierChange(e.target.value)}
+                                        >
+                                            <option value="">Select Supplier</option>
+                                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>Internal Batch No</span>
+                                        <input type="text" style={InputParams.style} value={header.batchNo} readOnly />
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>GRN Date</span>
+                                        <input type="date" style={InputParams.style} value={header.invoiceDate} onChange={e => setHeader({ ...header, invoiceDate: e.target.value })} />
+                                    </div>
+                                </div>
+
+                                {/* Column 2: Invoice Info */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div>
+                                        <span style={LabelStyle}>Invoice No</span>
+                                        <input
+                                            type="text"
+                                            style={{ ...InputParams.style, background: '#fffbeb', color: '#000' }} // Yellow bg from screenshot
+                                            value={header.invoiceNo}
+                                            onChange={e => setHeader({ ...header, invoiceNo: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>Due Date</span>
+                                        <input type="date" style={InputParams.style} value={header.dueDate} onChange={e => setHeader({ ...header, dueDate: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>Payment Mode</span>
+                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', height: '30px' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                                <input type="radio" name="paymode" checked={header.paymentMode === 'Cash'} onChange={() => setHeader({ ...header, paymentMode: 'Cash' })} /> Cash
+                                            </label>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.9rem', cursor: 'pointer' }}>
+                                                <input type="radio" name="paymode" checked={header.paymentMode === 'Credit'} onChange={() => setHeader({ ...header, paymentMode: 'Credit' })} /> Credit
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Column 3: Bill Info & Comments */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div>
+                                        <span style={LabelStyle}>Bill No</span>
+                                        <input type="text" style={InputParams.style} value={header.billNo} onChange={e => setHeader({ ...header, billNo: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>Bill Date</span>
+                                        <input type="date" style={InputParams.style} value={header.billDate} onChange={e => setHeader({ ...header, billDate: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <span style={LabelStyle}>Comments</span>
+                                        <textarea
+                                            style={{ ...InputParams.style, resize: 'none', height: '32px' }}
+                                            value={header.comments}
+                                            onChange={e => setHeader({ ...header, comments: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Column 4: Financial Summary */}
+                                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Inv Amount:</span>
+                                        <input type="number" readOnly style={{ ...InputParams.style, textAlign: 'right', background: 'var(--surface)' }} value={financials.invoiceAmount.toFixed(2)} />
+
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Load/Freight:</span>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <input type="number" placeholder="Load" style={{ ...InputParams.style, width: '50%' }} value={financials.loadingExp} onChange={e => setFinancials({ ...financials, loadingExp: e.target.value })} />
+                                            <input type="number" placeholder="Frgt" style={{ ...InputParams.style, width: '50%' }} value={financials.freightExp} onChange={e => setFinancials({ ...financials, freightExp: e.target.value })} />
+                                        </div>
+
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Adv.Tax/Disc:</span>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            <input type="number" placeholder="Adv.Tx" style={{ ...InputParams.style, width: '50%' }} value={financials.advanceTax} onChange={e => setFinancials({ ...financials, advanceTax: e.target.value })} />
+                                            <input type="number" placeholder="Disc" style={{ ...InputParams.style, width: '50%' }} value={financials.discount} onChange={e => setFinancials({ ...financials, discount: e.target.value })} />
+                                        </div>
+
+                                        <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>Net Pay:</span>
+                                        <input type="number" readOnly style={{ ...InputParams.style, textAlign: 'right', fontWeight: 'bold', color: 'white', background: 'var(--primary)' }} value={financials.netTotal.toFixed(2)} />
+                                    </div>
+                                </div>
+
+                            </div>
+                        ) : (
+                            // Compact View
+                            <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '16px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Supplier:</span>
+                                    <span style={{ color: 'white' }}>{suppliers.find(s => s.id == selectedSupplier)?.name || 'N/A'}</span>
+                                </div>
+                                <div style={{ width: '1px', height: '20px', background: 'var(--border)' }}></div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--primary)' }}>Invoice:</span>
+                                    <span style={{ color: 'white' }}>{header.invoiceNo || 'N/A'}</span>
+                                </div>
+                                <div style={{ width: '1px', height: '20px', background: 'var(--border)' }}></div>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--primary)' }}>Net Pay:</span>
+                                    <span style={{ color: 'white', fontWeight: 'bold' }}>{financials.netTotal.toFixed(2)}</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Sub-Header: Product Search & PO Load */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
@@ -507,25 +622,66 @@ const GRN = ({ tenantId }) => {
                                         }}
                                     />
                                     {searchResults.length > 0 && (
-                                        <div className="glass-card" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, padding: 0, maxHeight: '300px', overflowY: 'auto' }}>
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            marginTop: '8px',
+                                            left: 0,
+                                            right: 0,
+                                            zIndex: 9999,
+                                            background: '#0f172a', // Solid dark background (Slate 900)
+                                            border: '1px solid #334155', // Slate 700 border
+                                            borderRadius: '8px',
+                                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+                                            padding: '0',
+                                            maxHeight: '400px',
+                                            overflowY: 'auto'
+                                        }}>
                                             {searchResults.map(prod => (
                                                 <div
                                                     key={prod.id}
-                                                    style={{ padding: '8px', borderBottom: '1px solid var(--border)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}
+                                                    style={{
+                                                        padding: '12px 16px',
+                                                        borderBottom: '1px solid var(--border)',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        transition: 'background 0.2s'
+                                                    }}
                                                     onClick={() => {
                                                         addProduct(prod);
                                                         setSearchQuery('');
                                                         setSearchResults([]);
                                                     }}
-                                                    className="hover-bg"
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                                                 >
                                                     <div>
-                                                        <div style={{ fontWeight: 'bold' }}>{prod.product_name}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Code: {prod.product_code || 'N/A'} | Barcode: {prod.barcode || 'N/A'}</div>
+                                                        <div style={{ fontWeight: '600', color: '#fff', fontSize: '0.9rem', marginBottom: '2px' }}>{prod.product_name}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', gap: '8px' }}>
+                                                            <span>Code: <span style={{ fontFamily: 'monospace', color: '#cbd5e1' }}>{prod.product_code || '-'}</span></span>
+                                                            <span>•</span>
+                                                            <span>Stock: <span style={{ color: prod.current_stock > 0 ? '#4ade80' : '#f87171', fontWeight: 'bold' }}>{prod.current_stock || 0}</span></span>
+                                                        </div>
                                                     </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ color: 'var(--primary)' }}>Stock: {prod.current_stock || 0}</div>
-                                                        <button className="btn-xs" style={{ marginTop: '4px' }}>Add</button>
+                                                    <div style={{ paddingLeft: '16px' }}>
+                                                        <button
+                                                            style={{
+                                                                background: 'var(--primary)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '4px',
+                                                                width: '28px',
+                                                                height: '28px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            <Plus size={16} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -547,13 +703,25 @@ const GRN = ({ tenantId }) => {
                                     }}
                                 >
                                     <option value="">Select PO...</option>
-                                    {pendingPOs.map(po => (
+                                    {(Array.isArray(pendingPOs) ? pendingPOs : []).map(po => (
                                         <option key={po.id} value={po.id}>
                                             {po.po_no} ({new Date(po.issue_date).toLocaleDateString()})
                                         </option>
                                     ))}
                                 </select>
                                 <button className="btn-secondary" title="Load PO"><Download size={16} /></button>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showFOC}
+                                        onChange={e => setShowFOC(e.target.checked)}
+                                        style={{ accentColor: 'var(--primary)' }}
+                                    />
+                                    Show FOC Column
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -573,6 +741,7 @@ const GRN = ({ tenantId }) => {
                                         <th style={{ padding: '10px', textAlign: 'center', minWidth: '60px' }}>Factor</th>
                                         <th style={{ padding: '10px', textAlign: 'right', minWidth: '100px' }}>Total Amt</th>
                                         <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px', background: '#fffbeb', color: '#000', fontWeight: 'bold' }}>Order Qty</th>
+                                        {showFOC && <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px', background: '#ecfdf5', color: '#065f46', fontWeight: 'bold' }}>FOC Qty</th>}
                                         <th style={{ padding: '10px', textAlign: 'center', minWidth: '80px' }}>Total Units</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '120px' }}>Batch No</th>
                                         <th style={{ padding: '10px', textAlign: 'left', minWidth: '120px' }}>Expiry</th>
@@ -591,14 +760,14 @@ const GRN = ({ tenantId }) => {
                                                         onClick={() => updateUnit(item.id, 'base')}
                                                         style={{ flex: 1, padding: '4px', border: 'none', background: item.selected_unit_type === 'base' ? 'var(--primary)' : 'transparent', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}
                                                     >
-                                                        {item.unit}
+                                                        {(!item.unit || (item.purchase_conv_unit_name && item.unit.toLowerCase() === item.purchase_conv_unit_name.toLowerCase())) ? 'Unit' : item.unit}
                                                     </button>
                                                     {item.purchase_conv_unit_id && (
                                                         <button
                                                             onClick={() => updateUnit(item.id, 'bulk')}
                                                             style={{ flex: 1, padding: '4px', border: 'none', background: item.selected_unit_type === 'bulk' ? 'var(--primary)' : 'transparent', color: 'white', fontSize: '0.75rem', cursor: 'pointer' }}
                                                         >
-                                                            {conversionUnits.find(u => u.id === item.purchase_conv_unit_id)?.name || 'Bulk'}
+                                                            {item.purchase_conv_unit_name || 'Bulk'}
                                                         </button>
                                                     )}
                                                 </div>
@@ -629,8 +798,18 @@ const GRN = ({ tenantId }) => {
                                                     onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
                                                 />
                                             </td>
+                                            {showFOC && (
+                                                <td style={{ padding: '8px', background: '#ecfdf5' }}>
+                                                    <input
+                                                        type="number"
+                                                        style={{ ...InputParams.style, textAlign: 'center', padding: '2px 4px', background: 'transparent', color: '#065f46', fontWeight: 'bold', border: 'none' }}
+                                                        value={item.focQuantity}
+                                                        onChange={(e) => handleItemChange(item.id, 'focQuantity', e.target.value)}
+                                                    />
+                                                </td>
+                                            )}
                                             <td style={{ padding: '8px', textAlign: 'center', color: 'var(--primary)', fontWeight: 'bold' }}>
-                                                {item.quantity * item.factor}
+                                                {(parseFloat(item.quantity || 0) + parseFloat(item.focQuantity || 0)) * item.factor}
                                             </td>
                                             <td style={{ padding: '8px' }}>
                                                 <input
@@ -657,7 +836,7 @@ const GRN = ({ tenantId }) => {
                                     ))}
                                     {items.length === 0 && (
                                         <tr>
-                                            <td colSpan="12" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                            <td colSpan={showFOC ? "13" : "12"} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                                                 No items. Begin by searching product or loading PO.
                                             </td>
                                         </tr>
@@ -701,36 +880,64 @@ const GRN = ({ tenantId }) => {
                 <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflow: 'hidden' }}>
 
                     {/* Filters */}
-                    <div className="glass-card" style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                        <div>
+                    <div className="glass-card" style={{ padding: '16px', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' }}>
+                        <div style={{ flex: 1, minWidth: '250px' }}>
+                            <span style={LabelStyle}>Search Records</span>
+                            <div style={{ position: 'relative' }}>
+                                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                <input
+                                    type="text"
+                                    style={{ ...InputParams.style, paddingLeft: '38px', height: '38px' }}
+                                    placeholder="Search GRN # or Invoice #..."
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        <div style={{ width: '200px' }}>
                             <span style={LabelStyle}>Supplier</span>
                             <select
-                                style={InputParams.style}
+                                style={{ ...InputParams.style, height: '38px' }}
                                 value={recordFilters.supplier}
-                                onChange={e => setRecordFilters(prev => ({ ...prev, supplier: e.target.value }))}
+                                onChange={e => {
+                                    setRecordFilters(prev => ({ ...prev, supplier: e.target.value }));
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <option value="">All Suppliers</option>
                                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         </div>
-                        <div>
+                        <div style={{ width: '150px' }}>
                             <span style={LabelStyle}>Start Date</span>
                             <input
                                 type="date"
-                                style={InputParams.style}
+                                style={{ ...InputParams.style, height: '38px' }}
                                 value={recordFilters.startDate}
-                                onChange={e => setRecordFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                onChange={e => {
+                                    setRecordFilters(prev => ({ ...prev, startDate: e.target.value }));
+                                    setCurrentPage(1);
+                                }}
                             />
                         </div>
-                        <div>
+                        <div style={{ width: '150px' }}>
                             <span style={LabelStyle}>End Date</span>
                             <input
                                 type="date"
-                                style={InputParams.style}
+                                style={{ ...InputParams.style, height: '38px' }}
                                 value={recordFilters.endDate}
-                                onChange={e => setRecordFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                onChange={e => {
+                                    setRecordFilters(prev => ({ ...prev, endDate: e.target.value }));
+                                    setCurrentPage(1);
+                                }}
                             />
                         </div>
+                        <button className="btn-primary" style={{ height: '38px', width: '38px', padding: 0 }} onClick={fetchRecords} disabled={recordsLoading}>
+                            <RefreshCw size={16} className={recordsLoading ? "spin" : ""} />
+                        </button>
                     </div>
 
                     {/* Records Table */}
@@ -739,17 +946,27 @@ const GRN = ({ tenantId }) => {
                             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                                 <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--surface)' }}>
                                     <tr>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem' }}>GRN #</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem' }}>Date</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem' }}>Supplier</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem' }}>Inv #</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '0.75rem' }}>Item Total</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '0.75rem' }}>Net Total</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '0.75rem' }}>Actions</th>
+                                        <th onClick={() => requestSort('custom_grn_no')} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                            GRN # <SortIcon column="custom_grn_no" />
+                                        </th>
+                                        <th onClick={() => requestSort('created_at')} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                            DATE <SortIcon column="created_at" />
+                                        </th>
+                                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem' }}>SUPPLIER</th>
+                                        <th onClick={() => requestSort('invoice_no')} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                            INV # <SortIcon column="invoice_no" />
+                                        </th>
+                                        <th onClick={() => requestSort('sub_total')} style={{ textAlign: 'right', padding: '12px 16px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                            ITEM TOTAL <SortIcon column="sub_total" />
+                                        </th>
+                                        <th onClick={() => requestSort('net_total')} style={{ textAlign: 'right', padding: '12px 16px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                            NET TOTAL <SortIcon column="net_total" />
+                                        </th>
+                                        <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '0.75rem' }}>ACTIONS</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {records.map(r => (
+                                    {(Array.isArray(records) ? records : []).map(r => (
                                         <tr key={r.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
                                             <td style={{ padding: '12px 16px', fontSize: '0.85rem', fontWeight: 'bold' }}>{r.custom_grn_no}</td>
                                             <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>{new Date(r.created_at).toLocaleDateString()}</td>
@@ -764,7 +981,7 @@ const GRN = ({ tenantId }) => {
                                             </td>
                                         </tr>
                                     ))}
-                                    {records.length === 0 && (
+                                    {(!Array.isArray(records) || records.length === 0) && (
                                         <tr>
                                             <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                                                 No GRN records found.
@@ -774,9 +991,49 @@ const GRN = ({ tenantId }) => {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Pagination for Records */}
+                        <PaginationControls
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            pageSize={pageSize}
+                            totalItems={totalItems}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(newSize) => {
+                                setPageSize(newSize);
+                                setCurrentPage(1);
+                            }}
+                        />
                     </div>
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={isConfirmOpen}
+                onClose={() => setIsConfirmOpen(false)}
+                onConfirm={() => {
+                    // Logic from performClear refactored into a separate function or inline here
+                    setItems([]);
+                    setHeader({
+                        invoiceNo: '',
+                        invoiceDate: new Date().toISOString().split('T')[0],
+                        batchNo: '',
+                        dueDate: new Date().toISOString().split('T')[0],
+                        billNo: '',
+                        billDate: new Date().toISOString().split('T')[0],
+                        paymentMode: 'Cash',
+                        comments: ''
+                    });
+                    setSelectedSupplier('');
+                    setSelectedPO('');
+                    setPendingPOs([]);
+                    setIsConfirmOpen(false);
+                }}
+                title="Clear GRN Form"
+                message="Are you sure you want to clear the form? All unsaved items and header data will be lost."
+                confirmText="Clear Form"
+                type="warning"
+            />
         </div>
     );
 };

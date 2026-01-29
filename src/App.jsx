@@ -4,6 +4,7 @@ import SuperAdminLogin from './pages/SuperAdminLogin';
 import Dashboard from './pages/Dashboard';
 import { useState, useEffect } from 'react';
 import { APP_BASE_URL, getTenantURL, getTenantId } from './services/api';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
     const [tenant, setTenant] = useState(localStorage.getItem('tenant_id') || '');
@@ -85,6 +86,32 @@ function App() {
 
     return (
         <div className="App">
+            <Toaster
+                position="top-right"
+                toastOptions={{
+                    duration: 3000,
+                    style: {
+                        background: '#1e293b',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '8px',
+                        fontSize: '0.9rem',
+                    },
+                    success: {
+                        iconTheme: {
+                            primary: '#22c55e',
+                            secondary: '#fff',
+                        },
+                    },
+                    error: {
+                        iconTheme: {
+                            primary: '#ef4444',
+                            secondary: '#fff',
+                        },
+                        duration: 4000,
+                    },
+                }}
+            />
             <Routes>
                 <Route
                     path="/login"

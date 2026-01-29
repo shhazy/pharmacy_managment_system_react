@@ -204,7 +204,11 @@ export const tenantAPI = {
 
 // Inventory CRUD API
 export const inventoryCRUDAPI = {
-    list: (entity, tenantId) => apiCall(`/inventory/${entity}`, { headers: getAuthHeaders(tenantId) }),
+    list: (entity, tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/inventory/${entity}?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
+    listAll: (entity, tenantId) => apiCall(`/inventory/${entity}/all`, { headers: getAuthHeaders(tenantId) }),
     get: (entity, id, tenantId) => apiCall(`/inventory/${entity}/${id}`, { headers: getAuthHeaders(tenantId) }),
     create: (entity, data, tenantId) => apiCall(`/inventory/${entity}`, {
         method: 'POST',
@@ -224,7 +228,10 @@ export const inventoryCRUDAPI = {
 
 // Product API
 export const productAPI = {
-    list: (tenantId) => apiCall('/products/', { headers: getAuthHeaders(tenantId) }),
+    list: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/products/?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
     get: (id, tenantId) => apiCall(`/products/${id}`, { headers: getAuthHeaders(tenantId) }),
     create: (data, tenantId) => apiCall('/products/', {
         method: 'POST',
@@ -238,6 +245,16 @@ export const productAPI = {
     }),
     delete: (id, tenantId) => apiCall(`/products/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(tenantId)
+    })
+};
+
+// App Settings API
+export const appSettingsAPI = {
+    get: (tenantId) => apiCall('/app-settings', { headers: getAuthHeaders(tenantId) }),
+    update: (data, tenantId) => apiCall('/app-settings', {
+        method: 'PUT',
+        body: JSON.stringify(data),
         headers: getAuthHeaders(tenantId)
     })
 };

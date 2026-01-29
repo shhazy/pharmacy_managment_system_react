@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Calendar, ChevronDown, ChevronRight, Save, X, Trash2 } from 'lucide-react';
 import { API_BASE_URL } from '../services/api';
+import PaginationControls from '../components/PaginationControls';
+import { showSuccess, showError } from '../utils/toast';
 
 const JournalEntries = ({ tenant }) => {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [accounts, setAccounts] = useState([]);
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -75,7 +81,7 @@ const JournalEntries = ({ tenant }) => {
         const totalCredit = formData.lines.reduce((sum, line) => sum + Number(line.credit_amount), 0);
 
         if (Math.abs(totalDebit - totalCredit) > 0.01) {
-            alert(`Entries must balance. Debits: ${totalDebit}, Credits: ${totalCredit}`);
+            showError(`Entries must balance. Debits: ${totalDebit}, Credits: ${totalCredit}`);
             return;
         }
 
@@ -115,18 +121,19 @@ const JournalEntries = ({ tenant }) => {
                         { account_id: '', debit_amount: 0, credit_amount: 0, description: '' }
                     ]
                 });
+                showSuccess("Journal Entry Saved");
             } else {
                 const err = await res.json();
-                alert(err.detail || 'Failed to create entry');
+                showError(err.detail || 'Failed to create entry');
             }
         } catch (e) {
             console.error(e);
-            alert('Error creating entry');
+            showError('Error creating entry');
         }
     };
 
     return (
-        <div style={{ padding: '0px' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -144,7 +151,7 @@ const JournalEntries = ({ tenant }) => {
             </div>
 
             {/* List */}
-            <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <div style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
                     <div style={{ position: 'relative', maxWidth: '400px' }}>
                         <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
@@ -152,44 +159,60 @@ const JournalEntries = ({ tenant }) => {
                     </div>
                 </div>
 
-                {loading ? <div style={{ padding: '40px', textAlign: 'center' }}>Loading transactions...</div> : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                            <tr>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>DATE</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>DESCRIPTION</th>
-                                <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ACCOUNTS & ENTRIES</th>
-                                <th style={{ padding: '16px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ACTIONS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {entries.map(entry => (
-                                <tr key={entry.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '16px', verticalAlign: 'top' }}>
-                                        <div style={{ fontWeight: '500' }}>{entry.entry_date}</div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{entry.entry_number}</div>
-                                    </td>
-                                    <td style={{ padding: '16px', verticalAlign: 'top' }}>{entry.description}</td>
-                                    <td style={{ padding: '16px' }}>
-                                        {entry.lines.map((line, i) => (
-                                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.9rem' }}>
-                                                <span style={{ color: line.debit_amount > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                                                    {line.account_name || 'Account ' + line.account_id}
-                                                </span>
-                                                <span style={{ fontFamily: 'monospace' }}>
-                                                    {line.debit_amount > 0 ? `Dr. ${line.debit_amount}` : `Cr. ${line.credit_amount}`}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </td>
-                                    <td style={{ padding: '16px', textAlign: 'right' }}>
-                                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)' }}>View</button>
-                                    </td>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {loading ? <div style={{ padding: '40px', textAlign: 'center' }}>Loading transactions...</div> : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead style={{ background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 10, borderBottom: '1px solid var(--border)' }}>
+                                <tr>
+                                    <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--surface)' }}>DATE</th>
+                                    <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--surface)' }}>DESCRIPTION</th>
+                                    <th style={{ padding: '16px', textAlign: 'left', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--surface)' }}>ACCOUNTS & ENTRIES</th>
+                                    <th style={{ padding: '16px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--surface)' }}>ACTIONS</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                            </thead>
+                            <tbody>
+                                {entries
+                                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                                    .map(entry => (
+                                        <tr key={entry.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: '16px', verticalAlign: 'top' }}>
+                                                <div style={{ fontWeight: '500' }}>{entry.entry_date}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{entry.entry_number}</div>
+                                            </td>
+                                            <td style={{ padding: '16px', verticalAlign: 'top' }}>{entry.description}</td>
+                                            <td style={{ padding: '16px' }}>
+                                                {entry.lines.map((line, i) => (
+                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '0.9rem' }}>
+                                                        <span style={{ color: line.debit_amount > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                                                            {line.account_name || 'Account ' + line.account_id}
+                                                        </span>
+                                                        <span style={{ fontFamily: 'monospace' }}>
+                                                            {line.debit_amount > 0 ? `Dr. ${line.debit_amount}` : `Cr. ${line.credit_amount}`}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </td>
+                                            <td style={{ padding: '16px', textAlign: 'right' }}>
+                                                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)' }}>View</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+
+                <PaginationControls
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(entries.length / pageSize)}
+                    pageSize={pageSize}
+                    totalItems={entries.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
             </div>
 
             {/* Modal */}

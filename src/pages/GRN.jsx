@@ -4,6 +4,8 @@ import { procurementAPI, inventoryAPI, medicineAPI, inventoryCRUDAPI, appSetting
 import { showSuccess, showError, showInfo } from '../utils/toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PaginationControls from '../components/PaginationControls';
+import ProductLookupModal from '../components/ProductLookupModal';
+import ProductSearchBar from '../components/ProductSearchBar';
 
 const GRN = ({ tenantId }) => {
     const [activeTab, setActiveTab] = useState('GRN'); // GRN or Records
@@ -20,6 +22,8 @@ const GRN = ({ tenantId }) => {
     // PO Loading State
     const [pendingPOs, setPendingPOs] = useState([]);
     const [selectedPO, setSelectedPO] = useState('');
+    const [showHelp, setShowHelp] = useState(false);
+    const [allInventory, setAllInventory] = useState([]);
 
     const [header, setHeader] = useState({
         invoiceNo: '',
@@ -49,6 +53,17 @@ const GRN = ({ tenantId }) => {
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [showFOC, setShowFOC] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'F3') {
+                e.preventDefault();
+                setShowHelp(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // --- Handlers ---
     const handleSearchInput = async (val) => {
@@ -113,6 +128,10 @@ const GRN = ({ tenantId }) => {
                 setSuppliers(supData);
                 // Handle both array and object responses
                 setConversionUnits(Array.isArray(unitData) ? unitData : (unitData?.data || []));
+
+                // Fetch All Inventory for F3 Modal
+                const inv = await inventoryAPI.getInventory(tenantId);
+                setAllInventory(Array.isArray(inv) ? inv : []);
             } catch (err) {
                 console.error("Failed to load initial data", err);
                 setConversionUnits([]); // Fallback to empty array
@@ -606,11 +625,8 @@ const GRN = ({ tenantId }) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
                             <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
                                 <div style={{ position: 'relative', flex: 1 }}>
-                                    <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                                    <input
-                                        type="text"
-                                        placeholder="Scan Barcode or Search Product Code..."
-                                        style={{ ...InputParams.style, paddingLeft: '32px' }}
+                                    <ProductSearchBar
+                                        placeholder="Scan Barcode or Search Product Code... (F3 list)"
                                         value={searchQuery}
                                         onChange={e => handleSearchInput(e.target.value)}
                                         onKeyDown={e => {
@@ -620,6 +636,7 @@ const GRN = ({ tenantId }) => {
                                                 setSearchResults([]);
                                             }
                                         }}
+                                        containerStyle={{ height: '38px', borderRadius: '19px' }}
                                     />
                                     {searchResults.length > 0 && (
                                         <div style={{
@@ -1007,6 +1024,16 @@ const GRN = ({ tenantId }) => {
                     </div>
                 </div>
             )}
+
+            <ProductLookupModal
+                isOpen={showHelp}
+                onClose={() => setShowHelp(false)}
+                onSelect={(p, batch, q) => {
+                    addProduct(p);
+                    setShowHelp(false);
+                }}
+                products={allInventory}
+            />
 
             <ConfirmDialog
                 isOpen={isConfirmOpen}

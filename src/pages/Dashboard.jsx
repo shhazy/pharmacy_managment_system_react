@@ -1,6 +1,7 @@
-﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, ChevronRight, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer, Banknote, CreditCard, User, Bell, BarChart3, Monitor, Hash } from 'lucide-react';
+﻿import { LayoutGrid, Package, ShoppingCart, Users, LogOut, TrendingUp, AlertCircle, Plus, Store, Database, ShieldCheck, Trash2, Edit2, X, ChevronLeft, ChevronRight, UserPlus, List as ListIcon, Search, Layers, Boxes, Tag, Building2, Warehouse, Truck, Scale, Settings, Menu, FileText, Printer, Banknote, CreditCard, User, Bell, BarChart3, Monitor, Hash, Eye } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import ProductDefinition from './ProductDefinition';
 import NavDropdown from '../components/NavDropdown';
 import InventoryCRUDManager from './InventoryCRUDManager';
@@ -16,6 +17,8 @@ import Payments from './Payments';
 import ChartOfAccounts from './ChartOfAccounts';
 import JournalEntries from './JournalEntries';
 import InventorySetup from './InventorySetup';
+import CustomerManager from './CustomerManager';
+import CustomerSetup from './CustomerSetup';
 import PaginationControls from '../components/PaginationControls';
 import { showSuccess, showError, showInfo } from '../utils/toast';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -216,6 +219,28 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                         active={activeView === 'Overview'}
                         onClick={() => setActiveView('Overview')}
                     />
+                    {isSuperAdmin && (
+                        <>
+                            <NavItem
+                                icon={<Building2 size={20} />}
+                                label="Pharmacies"
+                                active={activeView === 'Pharmacies'}
+                                onClick={() => setActiveView('Pharmacies')}
+                            />
+                            <NavItem
+                                icon={<User size={20} />}
+                                label="Profile"
+                                active={activeView === 'Profile'}
+                                onClick={() => setActiveView('Profile')}
+                            />
+                            <NavItem
+                                icon={<CreditCard size={20} />}
+                                label="Software Payments"
+                                active={activeView === 'Software Payments Review'}
+                                onClick={() => setActiveView('Software Payments Review')}
+                            />
+                        </>
+                    )}
                     {!isSuperAdmin && (
                         <>
                             {(userData.roles.includes('Admin') || userData.roles.includes('Manager') || userData.roles.includes('Pharmacist')) && (
@@ -229,6 +254,18 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                         { view: 'Products', label: 'Products', icon: <Package size={16} /> },
                                         { view: 'InventoryAdjustment', label: 'Stock Adjustment', icon: <Hash size={16} /> },
                                         { view: 'InventorySetup', label: 'Data Setup', icon: <Settings size={16} /> },
+                                    ]}
+                                />
+                            )}
+                            {(userData.roles.includes('Admin') || userData.roles.includes('Manager')) && (
+                                <NavDropdown
+                                    icon={<Users size={20} />}
+                                    label="Customers"
+                                    activeView={activeView}
+                                    setActiveView={setActiveView}
+                                    items={[
+                                        { view: 'Customers', label: 'Manage Customers', icon: <User size={16} /> },
+                                        { view: 'CustomerSetup', label: 'Customer Setup', icon: <Settings size={16} /> },
                                     ]}
                                 />
                             )}
@@ -302,6 +339,12 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                         label="Supplier Payments"
                                         active={activeView === 'Payments'}
                                         onClick={() => setActiveView('Payments')}
+                                    />
+                                    <NavItem
+                                        icon={<CreditCard size={20} />}
+                                        label="Software Payments"
+                                        active={activeView === 'Software Payments'}
+                                        onClick={() => setActiveView('Software Payments')}
                                     />
                                 </>
                             )}
@@ -465,7 +508,11 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                 <div style={{ padding: isFullscreen ? '16px' : '32px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
                     <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', paddingRight: '8px' }}>
                         {isSuperAdmin ? (
-                            activeView === 'Overview' ? <TenantManager /> : <TenantList openConfirm={openConfirm} />
+                            activeView === 'Overview' ? <SuperAdminOverview setActiveView={setActiveView} /> :
+                                activeView === 'Pharmacies' ? <TenantManager openConfirm={openConfirm} /> :
+                                    activeView === 'Profile' ? <SuperAdminProfile /> :
+                                        activeView === 'Software Payments Review' ? <SoftwarePaymentReview /> :
+                                            <SuperAdminOverview setActiveView={setActiveView} />
                         ) : (
                             activeView === 'Staff' ? <StaffManager tenantId={tenant} currentUser={userData} openConfirm={openConfirm} /> :
                                 activeView === 'Inventory' ? <InventoryManager tenantId={tenant} /> :
@@ -480,20 +527,23 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                         }} /> :
                                             activeView === 'InventorySetup' ? <InventorySetup tenantId={tenant} /> :
                                                 activeView === 'InventoryAdjustment' ? <InventoryAdjustment tenantId={tenant} /> :
-                                                    activeView === 'POS' ? <POS tenantId={tenant} /> :
+                                                    activeView === 'POS' ? <POS tenantId={tenant} isFullscreen={isFullscreen} setFullscreen={setIsFullscreen} /> :
                                                         activeView === 'Invoices' ? <SalesHistory tenantId={tenant} /> :
                                                             activeView === 'Stores' ? <StoreManager tenantId={tenant} /> :
                                                                 activeView === 'Suppliers' ? <SupplierManager tenantId={tenant} /> :
-                                                                    activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
-                                                                        activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
-                                                                            activeView === 'GRN' ? <GRN tenantId={tenant} /> :
-                                                                                activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
-                                                                                    activeView === 'Reports' ? <Reports /> :
-                                                                                        activeView === 'ChartOfAccounts' ? <ChartOfAccounts tenant={tenant} /> :
-                                                                                            activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
-                                                                                                activeView === 'Payments' ? <Payments tenantId={tenant} /> :
-                                                                                                    activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
-                                                                                                        <DashboardOverview tenantId={tenant} />
+                                                                    activeView === 'Customers' ? <CustomerManager tenantId={tenant} /> :
+                                                                        activeView === 'CustomerSetup' ? <CustomerSetup tenantId={tenant} /> :
+                                                                            activeView === 'Patients' ? <PatientManager tenantId={tenant} /> :
+                                                                                activeView === 'PurchaseOrder' ? <PurchaseOrder tenantId={tenant} /> :
+                                                                                    activeView === 'GRN' ? <GRN tenantId={tenant} /> :
+                                                                                        activeView === 'Analytics' ? <AnalyticsDashboard tenantId={tenant} /> :
+                                                                                            activeView === 'Reports' ? <Reports /> :
+                                                                                                activeView === 'ChartOfAccounts' ? <ChartOfAccounts tenant={tenant} /> :
+                                                                                                    activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
+                                                                                                        activeView === 'Payments' ? <Payments tenantId={tenant} /> :
+                                                                                                            activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
+                                                                                                                activeView === 'Software Payments' ? <SoftwarePaymentManager tenantId={tenant} /> :
+                                                                                                                    <DashboardOverview tenantId={tenant} />
                         )}
                     </div>
                     <footer style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
@@ -786,7 +836,7 @@ const StaffList = ({ users, loading, onEdit, onDelete, tenantId, currentUser, op
                                         </div>
                                     </td>
                                     <td style={{ padding: '16px' }}>
-                                        <span style={{ fontSize: '0.8rem', color: '#10b981' }}>â— Active</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#10b981' }}>● Active</span>
                                     </td>
                                     <td style={{ padding: '16px', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -954,6 +1004,7 @@ const SalesHistory = ({ tenantId }) => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({});
+    const [appSettings, setAppSettings] = useState({});
     const [filters, setFilters] = useState({ start: '', end: '', status: 'All' });
 
     // Pagination state
@@ -988,93 +1039,262 @@ const SalesHistory = ({ tenantId }) => {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
             });
             if (res.ok) setSettings(await res.json());
+
+            const appRes = await fetch(`${API_BASE_URL}/app-settings`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
+            });
+            if (appRes.ok) setAppSettings(await appRes.json());
         } catch (e) { console.error(e); }
     };
 
     const printReceipt = (invoice) => {
         if (!invoice) return;
-        const width = 72; // mm
-        const win = window.open('', '', 'width=400,height=600');
+
+        const isReturn = invoice.status === 'Return' || invoice.net_total < 0;
+        const templateId = appSettings.invoice_template_id || 'default';
+        const custom = appSettings.invoice_custom_config || {};
+        const isClinix = templateId === 'clinix' || templateId === 'default';
+
+        let paperWidth = '72mm';
+        if (templateId === 'thermal58') paperWidth = '48mm';
+        if (templateId === 'detailed') paperWidth = '210mm';
+
+        const win = window.open('', '', 'width=800,height=900');
+
+        const clinixHeader = isClinix ? `
+            <div class="center" style="margin-bottom: 2px;">
+                ${(custom.showLogo !== false && settings.logo_url) ? `<img src="${settings.logo_url}" class="logo" />` : ''}
+            </div>
+            <div style="background: black; color: white; text-align: center; font-weight: bold; padding: 2px 0; font-size: 0.9em; margin-bottom: 8px; text-transform: uppercase;">
+                ${settings.tagline || 'THE MEDICINE SUPERSTORE'}
+            </div>
+            <div class="center" style="font-size: 1.1em; margin-bottom: 2px;">${settings.name || 'Bukhtiari Pharmacy'}</div>
+            <div class="center" style="font-size: 0.85em;">
+                ${settings.address || 'Amna Plaza Block#16, Near Girls Degree College, KW'}<br/>
+                Phone #: ${settings.phone_no || '065-2554412, 2557912'}<br/>
+                Drug Lic #: ${settings.license_no || '04-364-0045-022247P'}
+            </div>
+             <div class="center" style="font-size: 0.85em; margin-bottom: 8px;">(${invoice.id || '---'})</div>
+        ` : '';
+
+        const style = `
+             <style>
+                @page { margin: 0; }
+                body {
+                    font-family: ${isClinix ? "'Arial Narrow', 'Roboto Condensed', sans-serif" : (templateId === 'detailed' ? "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" : "'Courier New', monospace")};
+                    width: ${paperWidth};
+                    margin: ${templateId === 'detailed' ? '15mm' : '0 auto'};
+                    padding: ${isClinix ? '10px 5px' : '8px'};
+                    font-size: ${custom.fontSize || 12}px;
+                    color: black;
+                    line-height: 1.25;
+                }
+                .center { text-align: center; }
+                .right { text-align: right; }
+                .bold { font-weight: bold; }
+                .header { margin-bottom: ${isClinix ? '5px' : '12px'}; text-align: ${custom.headerAlign || 'center'}; }
+                .logo { max-width: 100%; max-height: 50px; margin-bottom: 5px; }
+                .divider { border-top: 1px dashed black; margin: 8px 0; }
+
+                .clinix-divider { border-top: 1px solid #000; margin: 5px 0; }
+                .row-sb { display: flex; justify-content: space-between; }
+                .clinix-table-header {
+                    display: grid;
+                    grid-template-columns: 2fr 35px 55px 55px 60px 70px;
+                    border-top: 1px solid black;
+                    border-bottom: 1px solid black;
+                    padding: 3px 0;
+                    margin: 5px 0;
+                    font-weight: bold;
+                    font-size: 0.95em;
+                }
+                .clinix-row {
+                    display: grid;
+                    grid-template-columns: 2fr 35px 55px 55px 60px 70px;
+                    margin-bottom: 4px;
+                    font-size: 0.95em;
+                }
+
+                @media print {
+                    body { width: ${paperWidth}; margin: ${templateId === 'detailed' ? '15mm' : '0 auto'}; }
+                }
+            </style>
+        `;
+
         const content = `
             <html>
             <head>
-                <title>Receipt</title>
-                <style>
-                    body { font-family: 'Courier New', monospace; width: ${width}mm; margin: 0 auto; padding: 5px; font-size: 11px; color: black; }
-                    .center { text-align: center; }
-                    .right { text-align: right; }
-                    .bold { fontWeight: bold; }
-                    .header { margin-bottom: 5px; }
-                    .logo { max-width: 60%; max-height: 60px; margin-bottom: 5px; }
-                    .divider { border-top: 1px dashed black; margin: 5px 0; }
-                    .row { display: flex; justify-content: space-between; }
-                    .table-header { font-weight: bold; border-bottom: 1px dashed black; padding-bottom: 2px; margin-bottom: 5px; }
-                    .item-row { margin-bottom: 4px; }
-                    .item-name { font-weight: bold; font-size: 12px; }
-                    .item-details { font-size: 10px; display: flex; justify-content: space-between; padding-left: 10px; }
-                    .footer { margin-top: 5px; }
-                    .big-total { font-size: 16px; font-weight: bold; }
-                    @media print { body { width: ${width}mm; margin: 0 auto; } }
-                </style>
+                <title>${isReturn ? 'Return Receipt' : 'Invoice'} - ${invoice.invoice_number}</title>
+                ${style}
             </head>
             <body>
-                <div class="header center">
-                    ${settings.logo_url ? `<img src="${settings.logo_url}" class="logo" />` : ''}
-                    <div style="font-size: 18px; font-weight: bold;">${settings.name || 'PHARMACY'}</div>
-                    <div style="font-size: 10px;">${settings.tagline || ''}</div>
-                    <div>${settings.address || ''}</div>
-                    <div>Ph: ${settings.phone_no || ''} ${settings.license_no ? `Lic: ${settings.license_no}` : ''}</div>
-                </div>
+                ${isReturn ? '<div class="center bold" style="font-size: 1.3em; margin-bottom: 8px; border: 1px solid black; padding: 2px;">SALE RETURN</div>' : ''}
 
-                <div class="divider"></div>
-                
-                <div class="row">
-                    <span>Inv #: ${invoice.invoice_number || '---'}</span>
-                    <span>POS No.: ${invoice.id || '---'}</span>
-                </div>
-                <div class="row">
-                    <span>Date: ${new Date(invoice.created_at).toLocaleString()}</span>
-                </div>
-                
-                <div class="divider"></div>
-
-                <div>
-                    <div class="table-header row">
-                        <span style="width: 5%">#</span>
-                        <span style="flex: 1">Description</span>
-                        <span style="width: 20%; text-align: right">Total</span>
-                    </div>
-                </div>
-
-                ${invoice.items.map((item, i) => `
-                    <div class="item-row">
-                        <div class="item-name">${i + 1}. ${item.product ? item.product.product_name : (item.name || 'Item')}</div>
-                        <div class="item-details">
-                            <span>
-                                ${item.unit_price} x ${item.quantity} 
-                            </span>
-                            <span>${(item.total_price || (item.unit_price * item.quantity)).toFixed(2)}</span>
+                ${isClinix ? clinixHeader : `
+                    <div class="header">
+                        ${(custom.showLogo !== false && settings.logo_url) ? `<img src="${settings.logo_url}" class="logo" />` : ''}
+                        <div style="font-size: 1.4em; font-weight: bold;">${settings.name || 'CITY CARE PHARMACY'}</div>
+                        ${custom.showTagline !== false ? `<div style="font-size: 0.9em; font-weight: bold; font-style: italic;">${settings.tagline || 'THE MEDICINE SUPERSTORE'}</div>` : ''}
+                        <div style="font-size: 0.85em; margin-top: 3px;">
+                            ${settings.address || 'PHARMACY ADDRESS'}<br/>
+                            Ph: ${settings.phone_no || '000-000000'} ${settings.license_no ? ` | Lic: ${settings.license_no}` : ''}
                         </div>
                     </div>
-                `).join('')}
+                `}
 
-                <div class="divider"></div>
+                ${isClinix ? `
+                   <div style="font-size: 0.9em; margin-bottom: 8px;">
+                       <div class="row-sb">
+                           <span>No . ${invoice.invoice_number || '---'}</span>
+                           <span>${new Date(invoice.created_at || new Date()).toLocaleString('en-GB')}</span>
+                       </div>
+                       <div style="margin-top: 2px;">
+                           M/s: ${custom.showCustomer !== false ? (invoice.customer_name || 'WALKING CUSTOMER') : 'WALKING CUSTOMER'} A/C
+                       </div>
+                       <div style="margin-top: 2px;">
+                           Remarks: ${(invoice.remarks || invoice.user?.name || 'ADMIN').toUpperCase()}
+                       </div>
+                   </div>
 
-                <div class="footer">
-                    <div class="row">
-                        <span>Total Qty: ${invoice.items.reduce((s, i) => s + i.quantity, 0)}</span>
-                        <span>Total Amount: ${invoice.net_total.toFixed(2)}</span>
+                    ${(() => {
+                    const hasPercentDisc = invoice.items.some(it => (it.discount_percent || 0) > 0);
+                    const hasAmountDisc = invoice.items.some(it => (it.discount_amount || 0) > 0);
+                    let discHeader = 'Disc';
+                    if (invoice.discount_mode === 'Percent' || hasPercentDisc) discHeader = 'Disc %';
+                    else if (invoice.discount_mode === 'Value' || hasAmountDisc) discHeader = 'Disc Rs';
+
+                    return `
+                            <div class="clinix-table-header">
+                                <span>Item Name</span>
+                                <span class="center">Qty</span>
+                                <span class="center">Price</span>
+                                <span class="center">GST %</span>
+                                <span class="center">${discHeader}</span>
+                                <span class="right">Total</span>
+                            </div>
+                        `;
+                })()}
+
+                   ${invoice.items.map(item => {
+                    const discPerc = item.discount_percent || 0;
+                    const discAmt = item.discount_amount || 0;
+                    const discDisplay = discPerc > 0 ? `${discPerc.toFixed(1)}%` : (discAmt > 0 ? `${discAmt.toFixed(2)}` : '0');
+                    const itemName = item.product_name || (item.product && item.product.product_name) || item.name || item.medicine_name || `Item ${item.medicine_id || '---'}`;
+
+                    return `
+                           <div class="clinix-row">
+                               <span style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                    ${itemName}
+                               </span>
+                               <span class="center">${item.quantity || item.qty || 0}</span>
+                               <span class="center">${(item.unit_price || 0).toFixed(2)}</span>
+                               <span class="center">${(item.tax_percent || 0)}%</span>
+                               <span class="center">${discDisplay}</span>
+                               <span class="right">${(item.total_price || 0).toFixed(2)}</span>
+                           </div>
+                       `;
+                }).join('')}
+
+                   <div class="clinix-divider"></div>
+
+                   <div style="font-size: 0.95em;">
+                       <div>Total items: ${invoice.items.length}</div>
+                       <div class="row-sb" style="margin-top: 5px;">
+                            <span class="center" style="width: 100%;">Gross Total :</span>
+                            <span class="right">${(invoice.sub_total || 0).toFixed(2)}</span>
+                       </div>
+                       ${invoice.tax_amount > 0 ? `
+                           <div class="row-sb">
+                               <span class="center" style="width: 100%;">GST Amount :</span>
+                               <span class="right">${invoice.tax_amount.toFixed(2)}</span>
+                           </div>
+                       ` : ''}
+                       ${invoice.discount_amount > 0 ? `
+                           <div class="row-sb">
+                               <span class="center" style="width: 100%;">Discount :</span>
+                               <span class="right">-${invoice.discount_amount.toFixed(2)}</span>
+                           </div>
+                       ` : ''}
+                       <div class="row-sb" style="margin-top: 15px; font-weight: bold; font-size: 1.1em;">
+                            <span>${invoice.user?.name || ''}</span>
+                            <span style="margin-left: auto;">Net Total.</span>
+                            <span style="margin-left: 20px;">${Math.abs(invoice.net_total || 0).toFixed(2)}</span>
+                       </div>
+                   </div>
+
+                   <div class="center" style="font-size: 0.7em; margin-top: 20px; border-top: 1px solid #000; padding-top: 5px;">
+                        (Computer Software developed by Antigravity AI<br/> Ph 042-3742xxx-xx)
+                   </div>
+
+                ` : `
+                    <!-- STANDARD / DEFAULT TEMPLATE LOGIC -->
+                    <div class="divider"></div>
+                    <div style="margin-bottom: 8px; font-size: 0.95em;">
+                        <div class="row">
+                            <span><span class="bold">${isReturn ? 'Ret. No:' : 'Invoice #:'}</span> ${isReturn ? (invoice.return_number || 'REV-' + invoice.id) : (invoice.invoice_number || '---')}</span>
+                            <span><span class="bold">POS No:</span> ${invoice.id || '---'}</span>
+                        </div>
+                        <div class="row">
+                            <span><span class="bold">Cashier:</span> ${custom.showCashier !== false ? (invoice.user?.name || 'ADMIN') : '---'}</span>
+                            <span>${new Date(invoice.created_at || new Date()).toLocaleString()}</span>
+                        </div>
+                        <div class="row">
+                            <span><span class="bold">Mode:</span> ${invoice.payment_method || 'Cash'}</span>
+                        </div>
+                         <div class="row">
+                            <span><span class="bold">Customer:</span> ${invoice.customer_name || 'Walk-in Customer'}</span>
+                        </div>
                     </div>
-                     <div class="row big-total" style="margin-top: 5px">
-                        <span>Payable:</span>
-                        <span>PKR ${invoice.net_total.toFixed(2)}</span>
+
+                    <div class="table-header">
+                        <div class="row">
+                            <span style="width: 10%">#</span><span style="flex: 1">Description</span><span style="width: 25%; text-align: right">Total</span>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="center" style="margin-top: 20px; font-size: 10px;">
-                    Thank you for your visit!<br/>
-                    Computer Software developed by EIGLOU
-                </div>
+
+                    ${invoice.items.map((item, i) => {
+                    const itemName = item.product_name || (item.product && item.product.product_name) || item.name || item.medicine_name || `Item ${item.medicine_id || '---'}`;
+                    const lineTax = (item.unit_price * (item.quantity || 0)) * ((item.tax_percent || 0) / 100);
+                    return `
+                        <div class="item-row">
+                            <div class="row">
+                                <span style="width: 10%">${i + 1}</span>
+                                <span style="flex: 1">${itemName}</span>
+                                <span style="width: 25%; text-align: right" class="bold">${(item.total_price || 0).toFixed(2)}</span>
+                            </div>
+                            <div style="font-size: 0.8em; padding-left: 10%; opacity: 0.7;">
+                                ${item.unit_price || 0} x ${item.quantity || item.qty || 0}
+                                ${item.tax_percent > 0 ? `| GST ${item.tax_percent}% (${lineTax.toFixed(2)})` : ''}
+                            </div>
+                        </div>
+                    `}).join('')}
+
+                    <div class="divider"></div>
+                    <div class="footer-sections">
+                         ${invoice.tax_amount > 0 ? `
+                             <div class="row">
+                                <span>TAX AMOUNT:</span>
+                                <span>${invoice.tax_amount.toFixed(2)}</span>
+                             </div>
+                         ` : ''}
+                         ${invoice.discount_amount > 0 ? `
+                             <div class="row">
+                                <span>DISCOUNT:</span>
+                                <span>-${invoice.discount_amount.toFixed(2)}</span>
+                             </div>
+                         ` : ''}
+                         <div class="row big-total">
+                            <span>NET PAYABLE:</span>
+                            <span>${invoice.net_total.toFixed(2)}</span>
+                         </div>
+                    </div>
+
+                    <div class="footer">
+                        <div class="center" style="margin-top: 15px; font-size: 0.9em;">
+                            ${settings.footer_text || 'Thank you for your visit!'}
+                        </div>
+                    </div>
+                `}
 
                 <script>
                     window.onload = function() { window.print(); window.close(); }
@@ -1082,6 +1302,7 @@ const SalesHistory = ({ tenantId }) => {
             </body>
             </html>
         `;
+
         win.document.write(content);
         win.document.close();
     };
@@ -1175,83 +1396,170 @@ const SalesHistory = ({ tenantId }) => {
     );
 };
 
-const TenantManager = () => {
-    const [name, setName] = useState('');
-    const [subdomain, setSubdomain] = useState('');
-    const [adminUser, setAdminUser] = useState('');
-    const [adminPass, setAdminPass] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [msg, setMsg] = useState({ type: '', text: '' });
+const SuperAdminOverview = ({ setActiveView }) => {
+    const [stats, setStats] = useState({
+        total_tenants: 0,
+        active_tenants: 0,
+        pending_payments: 0,
+        total_payments: 0
+    });
+    const [loading, setLoading] = useState(true);
 
-    const handleCreate = async (e) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setMsg({ type: '', text: '' });
-
+    const fetchStats = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/tenants/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    name,
-                    subdomain,
-                    admin_username: adminUser,
-                    admin_password: adminPass
-                })
+            const res = await fetch(`${API_BASE_URL}/superadmin/stats`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Failed to create tenant');
+            if (res.ok) {
+                const data = await res.json();
+                setStats(data);
             }
-
-            setMsg({
-                type: 'success',
-                text: `Tenant ${name} registered successfully!`
-            });
-            setName(''); setSubdomain(''); setAdminUser(''); setAdminPass('');
-        } catch (err) {
-            setMsg({ type: 'error', text: err.message });
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
     };
 
-    return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '32px' }}>
-            <div className="glass-card fade-in">
-                <h3 style={{ marginBottom: '20px' }}>Register New Pharmacy</h3>
-                <form onSubmit={handleCreate}>
-                    <div className="input-group">
-                        <label>Pharmacy Name</label>
-                        <input type="text" className="input-field" value={name} onChange={e => setName(e.target.value)} required />
-                    </div>
-                    <div className="input-group">
-                        <label>Subdomain Identifier</label>
-                        <input type="text" className="input-field" value={subdomain} onChange={e => setSubdomain(e.target.value)} required />
-                    </div>
-                    <div className="input-group">
-                        <label>Admin Username</label>
-                        <input type="text" className="input-field" value={adminUser} onChange={e => setAdminUser(e.target.value)} required />
-                    </div>
-                    <div className="input-group">
-                        <label>Admin Password</label>
-                        <input type="password" className="input-field" value={adminPass} onChange={e => setAdminPass(e.target.value)} required />
-                    </div>
-                    <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={isLoading}>
-                        {isLoading ? 'Creating...' : 'Register Pharmacy'}
-                    </button>
-                </form>
-                {msg.text && (
-                    <div style={{ marginTop: '16px', color: msg.type === 'error' ? '#f43f5e' : '#10b981', fontSize: '0.9rem' }}>
-                        {msg.text}
-                    </div>
-                )}
+    useEffect(() => { fetchStats(); }, []);
+
+    const StatCard = ({ title, value, icon, color, onClick }) => (
+        <div className="glass-card fade-in" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '200px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{title}</span>
+                <div style={{ padding: '8px', borderRadius: '8px', background: `${color}15`, color: color }}>
+                    {icon}
+                </div>
             </div>
-            <div className="glass-card">
+            <div style={{ fontSize: '1.8rem', fontWeight: 'bold' }}>{loading ? '...' : value}</div>
+        </div>
+    );
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div>
+                <h2 style={{ margin: '0 0 8px 0' }}>SuperAdmin Dashboard</h2>
+                <p style={{ margin: 0, color: 'var(--text-secondary)' }}>System-wide overview and management</p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
+                <StatCard
+                    title="Total Pharmacies"
+                    value={stats.total_tenants}
+                    icon={<Building2 size={20} />}
+                    color="#3b82f6"
+                    onClick={() => setActiveView('Pharmacies')}
+                />
+                <StatCard
+                    title="Active Tenants"
+                    value={stats.active_tenants}
+                    icon={<ShieldCheck size={20} />}
+                    color="#10b981"
+                    onClick={() => setActiveView('Pharmacies')}
+                />
+                <StatCard
+                    title="Pending Reviews"
+                    value={stats.pending_payments}
+                    icon={<AlertCircle size={20} />}
+                    color="#f59e0b"
+                    onClick={() => setActiveView('Software Payments Review')}
+                />
+                <StatCard
+                    title="Total Payments"
+                    value={stats.total_payments}
+                    icon={<CreditCard size={20} />}
+                    color="#a855f7"
+                    onClick={() => setActiveView('Software Payments Review')}
+                />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <div className="glass-card">
+                    <h3 style={{ margin: '0 0 20px 0' }}>Quick Actions</h3>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        <button className="btn-primary" onClick={() => setActiveView('Pharmacies')}>
+                            <Plus size={18} /> Register New Pharmacy
+                        </button>
+                        <button className="btn-secondary" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }} onClick={() => setActiveView('Software Payments Review')}>
+                            <ListIcon size={18} /> Review Payments
+                        </button>
+                    </div>
+                </div>
+
+                <div className="glass-card">
+                    <h3 style={{ margin: '0 0 20px 0' }}>System Status</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+                            <span style={{ fontSize: '0.9rem' }}>API Backend: Online</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+                            <span style={{ fontSize: '0.9rem' }}>Database Cluster: Healthy</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+                            <span style={{ fontSize: '0.9rem' }}>Storage Service: Operational</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+const TenantManager = ({ openConfirm }) => {
+    const [view, setView] = useState('list'); // list, create, edit
+    const [editingTenant, setEditingTenant] = useState(null);
+
+    const handleBack = () => {
+        setView('list');
+        setEditingTenant(null);
+    };
+
+    const handleEdit = (tenant) => {
+        setEditingTenant(tenant);
+        setView('edit');
+    };
+
+    if (view === 'create') {
+        return (
+            <div className='glass-card fade-in' style={{ maxWidth: '600px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                    <button onClick={handleBack} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <ChevronLeft size={24} />
+                    </button>
+                    <h3 style={{ margin: 0 }}>Register New Pharmacy</h3>
+                </div>
+                <TenantCreateForm onSuccess={handleBack} onCancel={handleBack} />
+            </div>
+        );
+    }
+
+    if (view === 'edit') {
+        return (
+            <div className='glass-card fade-in' style={{ maxWidth: '600px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                    <button onClick={handleBack} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <ChevronLeft size={24} />
+                    </button>
+                    <h3 style={{ margin: 0 }}>Edit Pharmacy: {editingTenant.name}</h3>
+                </div>
+                <TenantEditForm tenant={editingTenant} onSuccess={handleBack} onCancel={handleBack} />
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0 }}>Pharmacy Management</h2>
+                <button className='btn-primary' onClick={() => setView('create')}>
+                    <Plus size={18} /> Register New Pharmacy
+                </button>
+            </div>
+
+            <TenantList onEdit={handleEdit} openConfirm={openConfirm} />
+
+            <div className='glass-card'>
                 <h3 style={{ marginBottom: '20px' }}>System Health</h3>
                 <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1267,7 +1575,631 @@ const TenantManager = () => {
     );
 };
 
-const TenantList = ({ openConfirm }) => {
+const SoftwarePaymentManager = ({ tenantId }) => {
+    const [payments, setPayments] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [showUpload, setShowUpload] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [formData, setFormData] = useState({
+        valid_from: '',
+        valid_to: '',
+        receipt: null
+    });
+
+    const fetchPayments = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/software-payments/my`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'X-Tenant-ID': tenantId
+                }
+            });
+            const data = await res.json();
+            setPayments(Array.isArray(data) ? data : []);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { fetchPayments(); }, []);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setFormData({ ...formData, receipt: file });
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+        }
+    };
+
+    const handleEdit = (payment) => {
+        setEditingId(payment.id);
+        setFormData({
+            valid_from: payment.valid_from.split('T')[0],
+            valid_to: payment.valid_to.split('T')[0],
+            receipt: null
+        });
+        setPreviewUrl(`${API_BASE_URL.replace('/api', '')}/${payment.receipt_path}`);
+        setShowUpload(true);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const data = new FormData();
+        data.append('valid_from', formData.valid_from);
+        data.append('valid_to', formData.valid_to);
+        if (formData.receipt) {
+            data.append('receipt', formData.receipt);
+        }
+
+        try {
+            const url = editingId
+                ? `${API_BASE_URL}/software-payments/${editingId}`
+                : `${API_BASE_URL}/software-payments/`;
+            const method = editingId ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'X-Tenant-ID': tenantId
+                },
+                body: data
+            });
+            if (res.ok) {
+                setShowUpload(false);
+                setEditingId(null);
+                setPreviewUrl(null);
+                fetchPayments();
+                setFormData({ valid_from: '', valid_to: '', receipt: null });
+                showSuccess(`Payment ${editingId ? 'updated' : 'submitted'} successfully`);
+            } else {
+                showError(`Failed to ${editingId ? 'update' : 'submit'} payment`);
+            }
+        } catch (err) {
+            console.error(err);
+            showError("An error occurred during submission");
+        }
+    };
+
+    const closeForm = () => {
+        setShowUpload(false);
+        setEditingId(null);
+        setPreviewUrl(null);
+        setFormData({ valid_from: '', valid_to: '', receipt: null });
+    };
+
+    return (
+        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={{ margin: 0 }}>Software Payments</h2>
+                {!showUpload && (
+                    <button className="btn-primary" onClick={() => setShowUpload(true)}>
+                        <Plus size={18} /> New Payment
+                    </button>
+                )}
+            </div>
+
+            {showUpload && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 1fr) 1fr', gap: '24px', alignItems: 'start' }}>
+                    <div className="glass-card fade-in">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                            <h3 style={{ margin: 0 }}>{editingId ? 'Update Receipt' : 'Upload Receipt'}</h3>
+                            <button onClick={closeForm} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Valid From</label>
+                                    <input type="date" required className="input-field" value={formData.valid_from} onChange={e => setFormData({ ...formData, valid_from: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Valid To</label>
+                                    <input type="date" required className="input-field" value={formData.valid_to} onChange={e => setFormData({ ...formData, valid_to: e.target.value })} />
+                                </div>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Receipt (Image/PDF)</label>
+                                <input type="file" required={!editingId} className="input-field" onChange={handleFileChange} />
+                            </div>
+                            <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>
+                                {editingId ? 'Update Payment' : 'Submit Payment'}
+                            </button>
+                        </form>
+                    </div>
+
+                    {previewUrl && (
+                        <div className="glass-card fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                            <h3 style={{ margin: '0 0 20px 0' }}>Receipt Preview</h3>
+                            <div style={{ flex: 1, borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)', minHeight: '300px' }}>
+                                {previewUrl.toLowerCase().endsWith('.pdf') ? (
+                                    <embed src={previewUrl} type="application/pdf" width="100%" height="400px" />
+                                ) : (
+                                    <img src={previewUrl} alt="Receipt Preview" style={{ width: '100%', height: 'auto', display: 'block', maxHeight: '400px', objectFit: 'contain' }} />
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="glass-card">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Receipt</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Valid From</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Valid To</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Status</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr><td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading payments...</td></tr>
+                        ) : payments.length === 0 ? (
+                            <tr><td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>No payment history found.</td></tr>
+                        ) : payments.map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <td style={{ padding: '16px' }}>
+                                    <div style={{ width: '50px', height: '50px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}>
+                                        {p.receipt_path.toLowerCase().endsWith('.pdf') ? (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.7rem' }}>PDF</div>
+                                        ) : (
+                                            <img src={`${API_BASE_URL.replace('/api', '')}/${p.receipt_path}`} alt="Thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        )}
+                                    </div>
+                                </td>
+                                <td style={{ padding: '16px' }}>{new Date(p.valid_from).toLocaleDateString()}</td>
+                                <td style={{ padding: '16px' }}>{new Date(p.valid_to).toLocaleDateString()}</td>
+                                <td style={{ padding: '16px' }}>
+                                    <span className={`badge ${p.status === 'approved' ? 'badge-success' : p.status === 'rejected' ? 'badge-error' : 'badge-warning'}`}>
+                                        {p.status.toUpperCase()}
+                                    </span>
+                                    {p.rejection_reason && (
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '4px' }}>Reason: {p.rejection_reason}</div>
+                                    )}
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        {p.status === 'pending' && (
+                                            <button className="btn-icon" onClick={() => handleEdit(p)} title="Edit Pending Payment" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)' }}>
+                                                <Edit2 size={16} />
+                                            </button>
+                                        )}
+                                        <a href={`${API_BASE_URL.replace('/api', '')}/${p.receipt_path}`} target="_blank" rel="noreferrer" className="btn-icon" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)' }} title="View Receipt">
+                                            <Eye size={16} />
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const SoftwarePaymentReview = () => {
+    const [payments, setPayments] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [tenants, setTenants] = useState({});
+
+    // Approval Modal State
+    const [approveModalOpen, setApproveModalOpen] = useState(false);
+    const [selectedPayment, setSelectedPayment] = useState(null);
+    const [approvalDates, setApprovalDates] = useState({ valid_from: '', valid_to: '' });
+
+    // Rejection Modal State
+    const [rejectModalOpen, setRejectModalOpen] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [pRes, tRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/software-payments/all`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+                fetch(`${API_BASE_URL}/tenants/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+            ]);
+            const pData = await pRes.json();
+            const tData = await tRes.json();
+            setPayments(Array.isArray(pData) ? pData : []);
+            const tMap = {};
+            tData.forEach(t => tMap[t.id] = t.name);
+            setTenants(tMap);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { fetchData(); }, []);
+
+    const handleApproveClick = (payment) => {
+        setSelectedPayment(payment);
+        setApprovalDates({
+            valid_from: payment.valid_from.split('T')[0],
+            valid_to: payment.valid_to.split('T')[0]
+        });
+        setApproveModalOpen(true);
+    };
+
+    const handleRejectClick = (payment) => {
+        setSelectedPayment(payment);
+        setRejectionReason('');
+        setRejectModalOpen(true);
+    };
+
+    const confirmApprove = async () => {
+        if (!selectedPayment) return;
+
+        try {
+            await fetch(`${API_BASE_URL}/software-payments/${selectedPayment.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    status: 'approved',
+                    valid_from: approvalDates.valid_from,
+                    valid_to: approvalDates.valid_to
+                })
+            });
+            setApproveModalOpen(false);
+            setSelectedPayment(null);
+            fetchData();
+        } catch (err) { console.error(err); }
+    };
+
+    const confirmReject = async () => {
+        if (!selectedPayment || !rejectionReason) return;
+
+        try {
+            await fetch(`${API_BASE_URL}/software-payments/${selectedPayment.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status: 'rejected', rejection_reason: rejectionReason })
+            });
+            setRejectModalOpen(false);
+            setSelectedPayment(null);
+            fetchData();
+        } catch (err) { console.error(err); }
+    };
+
+    return (
+        <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <h2 style={{ margin: 0 }}>Software Payment Reviews</h2>
+            <div className="glass-card">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Pharmacy</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Validity</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Receipt</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)' }}>Status</th>
+                            <th style={{ padding: '16px', color: 'var(--text-secondary)', textAlign: 'right' }}>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {payments.length === 0 ? (
+                            <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>No payment submissions</td></tr>
+                        ) : payments.map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                <td style={{ padding: '16px', fontWeight: 'bold' }}>{tenants[p.tenant_id] || `ID: ${p.tenant_id}`}</td>
+                                <td style={{ padding: '16px', fontSize: '0.85rem' }}>
+                                    {new Date(p.valid_from).toLocaleDateString()} - {new Date(p.valid_to).toLocaleDateString()}
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                    <a href={`${API_BASE_URL.replace('/api', '')}/${p.receipt_path}`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none' }}>View Receipt</a>
+                                </td>
+                                <td style={{ padding: '16px' }}>
+                                    <span style={{
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        background: p.status === 'approved' ? '#10b98120' : p.status === 'rejected' ? '#f43f5e20' : '#f59e0b20',
+                                        color: p.status === 'approved' ? '#10b981' : p.status === 'rejected' ? '#f43f5e' : '#f59e0b'
+                                    }}>
+                                        {p.status.toUpperCase()}
+                                    </span>
+                                </td>
+                                <td style={{ padding: '16px', textAlign: 'right' }}>
+                                    {p.status === 'pending' && (
+                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                            <button onClick={() => handleApproveClick(p)} className="btn-primary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Approve</button>
+                                            <button onClick={() => handleRejectClick(p)} className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.8rem' }}>Reject</button>
+                                        </div>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Approval Modal */}
+            {approveModalOpen && createPortal(
+                <div className="fade-in" style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
+                }}>
+                    <div className="glass-card" style={{ width: '400px', padding: '24px', border: '1px solid var(--border)' }}>
+                        <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Approve Payment</h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                            Please confirm the validity period for this subscription.
+                        </p>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Valid From</label>
+                                <input
+                                    type="date"
+                                    className="input-field"
+                                    value={approvalDates.valid_from}
+                                    onChange={e => setApprovalDates({ ...approvalDates, valid_from: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Valid To</label>
+                                <input
+                                    type="date"
+                                    className="input-field"
+                                    value={approvalDates.valid_to}
+                                    onChange={e => setApprovalDates({ ...approvalDates, valid_to: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                            <button className="btn-secondary" onClick={() => setApproveModalOpen(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={confirmApprove}>Confirm Approval</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Rejection Modal */}
+            {rejectModalOpen && createPortal(
+                <div className="fade-in" style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
+                }}>
+                    <div className="glass-card" style={{ width: '400px', padding: '24px', border: '1px solid var(--border)' }}>
+                        <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Reject Payment</h3>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
+                            Please provide a reason for rejecting this payment.
+                        </p>
+
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Reason</label>
+                            <textarea
+                                className="input-field"
+                                style={{ width: '100%', minHeight: '100px', resize: 'vertical' }}
+                                placeholder="e.g. Invalid receipt, Incorrect amount..."
+                                value={rejectionReason}
+                                onChange={e => setRejectionReason(e.target.value)}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                            <button className="btn-secondary" onClick={() => setRejectModalOpen(false)}>Cancel</button>
+                            <button className="btn-primary" style={{ background: '#ef4444' }} onClick={confirmReject}>Confirm Reject</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+};
+
+const TenantCreateForm = ({ onSuccess, onCancel }) => {
+    const [name, setName] = useState('');
+    const [subdomain, setSubdomain] = useState('');
+    const [adminUser, setAdminUser] = useState('');
+    const [adminPass, setAdminPass] = useState('');
+    const [isTrial, setIsTrial] = useState(false);
+    const [trialEndDate, setTrialEndDate] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleCreate = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/tenants/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    name,
+                    subdomain,
+                    admin_username: adminUser,
+                    admin_password: adminPass,
+                    is_trial: isTrial,
+                    trial_end_date: isTrial ? trialEndDate : null
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Failed to create tenant');
+            }
+
+            showSuccess(`Tenant ${name} registered successfully!`);
+            onSuccess();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleCreate}>
+            <div className="input-group">
+                <label>Pharmacy Name</label>
+                <input type="text" className="input-field" value={name} onChange={e => setName(e.target.value)} required />
+            </div>
+            <div className="input-group">
+                <label>Subdomain Identifier</label>
+                <input type="text" className="input-field" value={subdomain} onChange={e => setSubdomain(e.target.value)} required />
+            </div>
+            <div className="input-group">
+                <label>Admin Username</label>
+                <input type="text" className="input-field" value={adminUser} onChange={e => setAdminUser(e.target.value)} required />
+            </div>
+            <div className="input-group">
+                <label>Admin Password</label>
+                <input type="password" className="input-field" value={adminPass} onChange={e => setAdminPass(e.target.value)} required />
+            </div>
+
+            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
+                <input
+                    type="checkbox"
+                    id="isTrial"
+                    checked={isTrial}
+                    onChange={e => setIsTrial(e.target.checked)}
+                />
+                <label htmlFor="isTrial" style={{ margin: 0 }}>Free Trial?</label>
+            </div>
+
+            {isTrial && (
+                <div className="input-group fade-in">
+                    <label>Trial End Date</label>
+                    <input
+                        type="date"
+                        className="input-field"
+                        value={trialEndDate}
+                        onChange={e => setTrialEndDate(e.target.value)}
+                        required={isTrial}
+                        min={new Date().toISOString().split('T')[0]}
+                    />
+                </div>
+            )}
+            <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={isLoading}>
+                {isLoading ? 'Creating...' : 'Register Pharmacy'}
+            </button>
+            {error && (
+                <div style={{ marginTop: '16px', color: '#f43f5e', fontSize: '0.9rem' }}>
+                    {error}
+                </div>
+            )}
+        </form>
+    );
+};
+
+const TenantEditForm = ({ tenant, onSuccess, onCancel }) => {
+    const [name, setName] = useState(tenant.name);
+    const [isActive, setIsActive] = useState(tenant.is_active);
+    const [isTrial, setIsTrial] = useState(tenant.is_trial || false);
+    const [trialEndDate, setTrialEndDate] = useState(tenant.trial_end_date ? tenant.trial_end_date.split('T')[0] : '');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/tenants/${tenant.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    name,
+                    is_active: isActive,
+                    is_trial: isTrial,
+                    trial_end_date: isTrial ? trialEndDate : null
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Failed to update tenant');
+            }
+
+            showSuccess(`Tenant ${name} updated successfully!`);
+            onSuccess();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleUpdate}>
+            <div className="input-group">
+                <label>Pharmacy Name</label>
+                <input type="text" className="input-field" value={name} onChange={e => setName(e.target.value)} required />
+            </div>
+            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={isActive}
+                    onChange={e => setIsActive(e.target.checked)}
+                />
+                <label htmlFor="isActive" style={{ margin: 0 }}>Is Active</label>
+
+                <input
+                    type="checkbox"
+                    id="isTrialEdit"
+                    checked={isTrial}
+                    onChange={e => setIsTrial(e.target.checked)}
+                    style={{ marginLeft: '16px' }}
+                />
+                <label htmlFor="isTrialEdit" style={{ margin: 0 }}>Free Trial</label>
+            </div>
+
+            {isTrial && (
+                <div className="input-group fade-in" style={{ marginTop: '16px' }}>
+                    <label>Trial End Date</label>
+                    <input
+                        type="date"
+                        className="input-field"
+                        value={trialEndDate}
+                        onChange={e => setTrialEndDate(e.target.value)}
+                        required={isTrial}
+                        min={new Date().toISOString().split('T')[0]}
+                    />
+                </div>
+            )}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button type="button" className="btn-secondary" onClick={onCancel} style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="btn-primary" style={{ flex: 2 }} disabled={isLoading}>
+                    {isLoading ? 'Saving...' : 'Update Pharmacy'}
+                </button>
+            </div>
+            {error && (
+                <div style={{ marginTop: '16px', color: '#f43f5e', fontSize: '0.9rem' }}>
+                    {error}
+                </div>
+            )}
+        </form>
+    );
+};
+
+const TenantList = ({ onEdit, openConfirm }) => {
     const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -1321,12 +2253,26 @@ const TenantList = ({ openConfirm }) => {
                             <td style={{ padding: '16px', fontWeight: '600' }}>{t.name}</td>
                             <td style={{ padding: '16px' }}>{t.subdomain}.localhost</td>
                             <td style={{ padding: '16px' }}>
-                                <span style={{ color: '#10b981', fontSize: '0.85rem' }}>Active</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <span style={{ color: t.is_active ? '#10b981' : '#ef4444', fontSize: '0.85rem' }}>
+                                        {t.is_active ? 'Active' : 'Inactive'}
+                                    </span>
+                                    {t.is_trial && (
+                                        <span style={{ fontSize: '0.75rem', color: '#f59e0b', background: '#f59e0b20', padding: '2px 6px', borderRadius: '4px', width: 'fit-content' }}>
+                                            Trial: {new Date(t.trial_end_date).toLocaleDateString()}
+                                        </span>
+                                    )}
+                                </div>
                             </td>
                             <td style={{ padding: '16px', textAlign: 'right' }}>
-                                <button onClick={() => handleDelete(t.id)} style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer' }}>
-                                    <Trash2 size={18} />
-                                </button>
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                    <button onClick={() => onEdit(t)} style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
+                                        <Edit2 size={18} />
+                                    </button>
+                                    <button onClick={() => handleDelete(t.id)} style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer' }}>
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     ))}
@@ -1349,10 +2295,10 @@ const InventoryManager = ({ tenantId }) => {
         setLoading(true);
         try {
             const [mRes, cRes, mnRes, sRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/inventory/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/categories/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/manufacturers/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId } }),
-                fetch(`${API_BASE_URL}/stores/`, { headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+                fetch(`${API_BASE_URL} /inventory/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')} `, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL} /categories/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')} `, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL} /manufacturers/`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')} `, 'X-Tenant-ID': tenantId } }),
+                fetch(`${API_BASE_URL} /stores/`, { headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')} ` } })
             ]);
             if (mRes.ok) setMedicines(await mRes.json());
             if (cRes.ok) setCategories(await cRes.json());
@@ -1430,7 +2376,7 @@ const InventoryManager = ({ tenantId }) => {
                                     <td style={{ padding: '20px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <div style={{ flex: 1, height: '6px', width: '80px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px' }}>
-                                                <div style={{ width: `${Math.min(100, (totalStock / m.reorder_level) * 25)}%`, height: '100%', background: healthColor, borderRadius: '3px' }}></div>
+                                                <div style={{ width: `${Math.min(100, (totalStock / m.reorder_level) * 25)}% `, height: '100%', background: healthColor, borderRadius: '3px' }}></div>
                                             </div>
                                             <span style={{ fontWeight: '700', color: healthColor }}>{totalStock}</span>
                                         </div>
@@ -1764,5 +2710,100 @@ const NavItem = ({ icon, label, active, onClick, style }) => (
         {label}
     </div>
 );
+
+const SuperAdminProfile = () => {
+    const [profile, setProfile] = useState({ username: '', email: '' });
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+
+    const fetchProfile = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/superadmin/me`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (res.ok) setProfile(await res.json());
+        } catch (e) {
+            showError("Failed to load profile");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchProfile(); }, []);
+
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const body = { username: profile.username, email: profile.email };
+            if (password) body.password = password;
+
+            const res = await fetch(`${API_BASE_URL}/superadmin/me`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (res.ok) {
+                showSuccess("Profile updated successfully");
+                setPassword('');
+                fetchProfile();
+            } else {
+                const err = await res.json();
+                showError(err.detail || "Update failed");
+            }
+        } catch (e) {
+            showError("An error occurred");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="glass-card">Loading profile...</div>;
+
+    return (
+        <div className="fade-in glass-card" style={{ maxWidth: '600px' }}>
+            <h3 style={{ marginBottom: '24px' }}>Update SuperAdmin Profile</h3>
+            <form onSubmit={handleUpdate}>
+                <div className="input-group">
+                    <label>Username</label>
+                    <input
+                        type="text"
+                        className="input-field"
+                        value={profile.username}
+                        onChange={e => setProfile({ ...profile, username: e.target.value })}
+                        required
+                    />
+                </div>
+                <div className="input-group">
+                    <label>Email Address</label>
+                    <input
+                        type="email"
+                        className="input-field"
+                        value={profile.email}
+                        onChange={e => setProfile({ ...profile, email: e.target.value })}
+                        required
+                    />
+                </div>
+                <div className="input-group">
+                    <label>New Password (leave blank to keep current)</label>
+                    <input
+                        type="password"
+                        className="input-field"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                    />
+                </div>
+                <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '24px' }} disabled={saving}>
+                    {saving ? 'Saving...' : 'Update Details'}
+                </button>
+            </form>
+        </div>
+    );
+};
 
 export default Dashboard;

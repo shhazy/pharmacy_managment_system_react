@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pill, ShieldCheck, Database } from 'lucide-react';
 import { API_BASE_URL, getTenantURL, getTenantId } from '../services/api';
+import toast from 'react-hot-toast';
 
 const Login = ({ setToken, setTenant, tenant }) => {
     const [tenantId, setTenantId] = useState(tenant || '');
@@ -53,6 +54,7 @@ const Login = ({ setToken, setTenant, tenant }) => {
             navigate('/dashboard');
         } catch (err) {
             setError(err.message);
+            toast.error(err.message);
         } finally {
             setIsLoading(false);
         }

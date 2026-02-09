@@ -14,19 +14,48 @@ const InventoryAdjustment = ({ tenantId }) => {
     const [history, setHistory] = useState([]);
     const [view, setView] = useState('form'); // form, history
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+    const [appSettings, setAppSettings] = useState(null);
 
     useEffect(() => {
-        fetchProducts();
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        if (debouncedSearchTerm) {
+            fetchProducts(debouncedSearchTerm);
+        } else {
+            setProducts([]);
+        }
+    }, [debouncedSearchTerm]);
+
+    useEffect(() => {
         fetchHistory();
+        fetchAppSettings();
     }, []);
 
-    const fetchProducts = async () => {
+    const fetchAppSettings = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/inventory/`, {
+            const res = await fetch(`${API_BASE_URL}/app-settings`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
+            });
+            if (res.ok) setAppSettings(await res.json());
+        } catch (e) { console.error(e); }
+    };
+
+    const fetchProducts = async (query) => {
+        setSearchLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/medicines/search?q=${encodeURIComponent(query)}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': tenantId }
             });
             if (res.ok) setProducts(await res.json());
         } catch (e) { console.error(e); }
+        finally { setSearchLoading(false); }
     };
 
     const fetchHistory = async () => {
@@ -39,11 +68,21 @@ const InventoryAdjustment = ({ tenantId }) => {
     };
 
     const handleSave = async () => {
-        if (!selectedBatch) return showError("Please select a product and batch");
+        if (!selectedProduct) return showError("Please select a product");
+        if (appSettings?.stock_adj_batch_required && !selectedBatch) {
+            return showError("Batch number is required for stock adjustment as per settings.");
+        }
         if (adjustmentQty === 0) return showError("Adjustment quantity cannot be 0");
 
-        const newQty = (selectedBatch.quantity || 0) + adjustmentQty;
-        if (newQty < 0) return showError(`Insufficient stock. Max reduction possible: ${selectedBatch.quantity}`);
+        // If batch is selected, validate stock against it
+        if (selectedBatch) {
+            const newQty = (selectedBatch.quantity || 0) + adjustmentQty;
+            if (newQty < 0) return showError(`Insufficient stock in selected batch. Max reduction possible: ${selectedBatch.quantity}`);
+        } else {
+            // If no batch selected, validate against total stock
+            const newTotalStock = (selectedProduct.current_stock || 0) + adjustmentQty;
+            if (newTotalStock < 0) return showError(`Insufficient total stock. Max reduction possible: ${selectedProduct.current_stock || 0}`);
+        }
 
         setLoading(true);
         try {
@@ -56,8 +95,8 @@ const InventoryAdjustment = ({ tenantId }) => {
                 },
                 body: JSON.stringify({
                     product_id: selectedProduct.id,
-                    inventory_id: selectedBatch.inventory_id,
-                    batch_number: selectedBatch.batch_number,
+                    inventory_id: selectedBatch?.inventory_id || null,
+                    batch_number: selectedBatch?.batch_number || null,
                     adjustment_type: adjustmentReason,
                     quantity_adjusted: adjustmentQty,
                     reason: notes
@@ -70,7 +109,7 @@ const InventoryAdjustment = ({ tenantId }) => {
                 setNotes('');
                 setSelectedProduct(null);
                 setSelectedBatch(null);
-                fetchProducts();
+                setSearchTerm('');
                 fetchHistory();
             } else {
                 const err = await res.json();
@@ -83,28 +122,31 @@ const InventoryAdjustment = ({ tenantId }) => {
         }
     };
 
-    const filteredProducts = products.filter(p =>
-        p.product_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     const renderForm = () => (
         <div className="glass-card fade-in">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 {/* Left Column: Product Selection */}
                 <div>
                     <h4 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Search size={18} className="text-primary" /> 1. Select Product
+                        <Search size={18} className="text-primary" /> 1. Search Product
                     </h4>
-                    <input
-                        type="text"
-                        placeholder="Search product..."
-                        className="input-field"
-                        style={{ width: '100%', marginBottom: '12px' }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                        {filteredProducts.map(p => (
+                    <div style={{ position: 'relative' }}>
+                        <input
+                            type="text"
+                            placeholder="Type medicine name to search..."
+                            className="input-field"
+                            style={{ width: '100%', marginBottom: '12px' }}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {searchLoading && (
+                            <div style={{ position: 'absolute', right: '12px', top: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                Searching...
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)' }}>
+                        {products.length > 0 ? products.map(p => (
                             <div
                                 key={p.id}
                                 onClick={() => { setSelectedProduct(p); setSelectedBatch(null); }}
@@ -119,10 +161,14 @@ const InventoryAdjustment = ({ tenantId }) => {
                             >
                                 <div style={{ fontWeight: 'bold' }}>{p.product_name}</div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                    Current Net Stock: {p.stock_quantity} {p.uom}
+                                    Current Net Stock: {p.current_stock || p.stock_quantity || 0} {p.uom}
                                 </div>
                             </div>
-                        ))}
+                        )) : searchTerm && !searchLoading && (
+                            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                No products found for "{searchTerm}"
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -134,32 +180,36 @@ const InventoryAdjustment = ({ tenantId }) => {
 
                     {selectedProduct ? (
                         <div className="fade-in">
-                            <label style={{ display: 'block', marginBottom: '8px' }}>Select Batch</label>
+                            <label style={{ display: 'block', marginBottom: '8px' }}>
+                                Select Batch {appSettings?.stock_adj_batch_required ? '(Required)' : '(Optional)'}
+                            </label>
                             <select
                                 className="input-field"
                                 style={{ width: '100%', marginBottom: '16px' }}
                                 value={selectedBatch?.inventory_id || ''}
-                                onChange={(e) => setSelectedBatch(selectedProduct.stock_inventory.find(b => b.inventory_id === parseInt(e.target.value)))}
+                                onChange={(e) => setSelectedBatch(selectedProduct.stock_inventory?.find(b => b.inventory_id === parseInt(e.target.value)) || null)}
                             >
-                                <option value="">-- Choose Batch --</option>
-                                {selectedProduct.stock_inventory.map(b => (
+                                <option value="">-- All Batches (Auto-apply to latest) --</option>
+                                {(selectedProduct.stock_inventory || []).map(b => (
                                     <option key={b.inventory_id} value={b.inventory_id}>
                                         Batch: {b.batch_number} (Qty: {b.quantity})
                                     </option>
                                 ))}
                             </select>
 
-                            {selectedBatch && (
+                            {(selectedBatch || !appSettings?.stock_adj_batch_required) && (
                                 <div className="fade-in">
                                     <div className="alert-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span>Current Batch Stock:</span>
-                                            <span style={{ fontWeight: 'bold' }}>{selectedBatch.quantity}</span>
+                                            <span>{selectedBatch ? 'Current Batch Stock:' : 'Total Product Stock:'}</span>
+                                            <span style={{ fontWeight: 'bold' }}>
+                                                {selectedBatch ? selectedBatch.quantity : (selectedProduct.current_stock || selectedProduct.stock_quantity || 0)}
+                                            </span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
                                             <span>Net After Adjustment:</span>
-                                            <span style={{ fontWeight: 'bold', color: (selectedBatch.quantity + adjustmentQty) >= 0 ? 'var(--primary)' : 'var(--error)' }}>
-                                                {selectedBatch.quantity + adjustmentQty}
+                                            <span style={{ fontWeight: 'bold', color: ((selectedBatch?.quantity || selectedProduct.current_stock || selectedProduct.stock_quantity || 0) + adjustmentQty) >= 0 ? 'var(--primary)' : 'var(--error)' }}>
+                                                {(selectedBatch?.quantity || selectedProduct.current_stock || selectedProduct.stock_quantity || 0) + adjustmentQty}
                                             </span>
                                         </div>
                                     </div>
@@ -255,7 +305,7 @@ const InventoryAdjustment = ({ tenantId }) => {
                                 <td style={{ padding: '12px', fontSize: '0.85rem' }}>
                                     {new Date(h.adjustment_date).toLocaleString()}
                                 </td>
-                                <td style={{ padding: '12px' }}>{prod?.product_name || `Product #${h.product_id}`}</td>
+                                <td style={{ padding: '12px' }}>{prod?.product_name || `Product #${h.product_id} `}</td>
                                 <td style={{ padding: '12px' }}>{h.batch_number}</td>
                                 <td style={{ padding: '12px' }}>
                                     <span className="badge" style={{ background: 'rgba(255,255,255,0.1)' }}>

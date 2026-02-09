@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
 
 const ConfirmDialog = ({
@@ -39,7 +40,7 @@ const ConfirmDialog = ({
 
     const theme = colors[type];
 
-    return (
+    return createPortal(
         <div style={{
             position: 'fixed',
             inset: 0,
@@ -188,7 +189,8 @@ const ConfirmDialog = ({
                     to { opacity: 1; transform: scale(1) translateY(0); }
                 }
             `}</style>
-        </div>
+        </div>,
+        document.body
     );
 };
 

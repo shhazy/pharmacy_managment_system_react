@@ -56,14 +56,34 @@ const apiCall = async (endpoint, options = {}) => {
     });
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-        // Handle 401 specifically?
         if (response.status === 401) {
-            // Optional: Logout if token expired
-            // localStorage.removeItem('token');
-            // window.location.href = '/login';
+            // Handle 401 Unauthorized (token expired or invalid)
+            console.warn("Session expired or invalid credentials. Logging out...");
+            localStorage.clear(); // Clear token and tenant info
+
+            // Redirect to login page on the current domain
+            const url = new URL(window.location.href);
+            // If they are on a subdomain (tk.localhost), keep them on the login page of that subdomain
+            window.location.href = '/login';
+
+            // Prevent further execution
+            return new Promise(() => { });
         }
-        throw new Error(error.detail || 'Request failed');
+
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+
+        // Handle varying error formats (especially Pydantic validation errors)
+        let errorMessage = error.detail || 'Request failed';
+        if (typeof errorMessage !== 'string') {
+            if (Array.isArray(errorMessage)) {
+                // Formatting Pydantic validation errors: Combine messages
+                errorMessage = errorMessage.map(e => e.msg || JSON.stringify(e)).join(', ');
+            } else {
+                errorMessage = JSON.stringify(errorMessage);
+            }
+        }
+
+        throw new Error(errorMessage);
     }
 
     return response.json();
@@ -247,6 +267,69 @@ export const productAPI = {
         method: 'DELETE',
         headers: getAuthHeaders(tenantId)
     })
+};
+
+// Customer API
+export const customerAPI = {
+    list: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/customers/?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
+    get: (id, tenantId) => apiCall(`/customers/${id}`, { headers: getAuthHeaders(tenantId) }),
+    create: (data, tenantId) => apiCall('/customers/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    update: (id, data, tenantId) => apiCall(`/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    delete: (id, tenantId) => apiCall(`/customers/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(tenantId)
+    }),
+    // Types
+    listTypes: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/customers/types?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
+    listAllTypes: (tenantId) => apiCall('/customers/types/all', { headers: getAuthHeaders(tenantId) }),
+    createType: (data, tenantId) => apiCall('/customers/types', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    updateType: (id, data, tenantId) => apiCall(`/customers/types/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    deleteType: (id, tenantId) => apiCall(`/customers/types/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(tenantId)
+    }),
+    // Groups
+    listGroups: (tenantId, params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return apiCall(`/customers/groups?${query}`, { headers: getAuthHeaders(tenantId) });
+    },
+    listAllGroups: (tenantId) => apiCall('/customers/groups/all', { headers: getAuthHeaders(tenantId) }),
+    createGroup: (data, tenantId) => apiCall('/customers/groups', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    updateGroup: (id, data, tenantId) => apiCall(`/customers/groups/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+        headers: getAuthHeaders(tenantId)
+    }),
+    deleteGroup: (id, tenantId) => apiCall(`/customers/groups/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(tenantId)
+    }),
 };
 
 // App Settings API

@@ -8,7 +8,18 @@ import { Toaster } from 'react-hot-toast';
 
 function App() {
     const [tenant, setTenant] = useState(localStorage.getItem('tenant_id') || '');
-    const [token, setToken] = useState(localStorage.getItem('token') || '');
+    const [token, setToken] = useState(() => {
+        // Prioritize token from URL to fix redirect loops when stale token exists in localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+        if (urlToken) {
+            localStorage.setItem('token', urlToken);
+            // Optional: Clean URL here or let useEffect handle it, 
+            // but setting localStorage immediately is critical before the initial render.
+            return urlToken;
+        }
+        return localStorage.getItem('token') || '';
+    });
 
     // Eagerly calculate isSuperAdmin to avoid first-render glitches
     const getInitialSA = () => {
@@ -31,13 +42,11 @@ function App() {
     };
 
     useEffect(() => {
-        // --- TOKEN HYDRATION FROM URL ---
+        // --- URL CLEANUP ---
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get('token');
         if (urlToken) {
-            localStorage.setItem('token', urlToken);
-            setToken(urlToken);
-            // Clean the URL without reloading
+            // We already grabbed it in useState, just clean the URL now to look nice
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 

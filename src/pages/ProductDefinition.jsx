@@ -27,7 +27,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
     // Search states for dropdowns
     const [searchStates, setSearchStates] = useState({
         lineItem: '', category: '', subCategory: '', productGroup: '', categoryGroup: '',
-        generic: '', calSeason: '', manufacturer: '', rack: '', supplier: '', purchaseConvUnit: ''
+        generic: '', calSeason: '', manufacturer: '', rack: '', supplier: '', purchaseConvUnit: '', baseUnit: ''
     });
 
     // Form data
@@ -45,6 +45,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
         supplier_id: null,
         suppliers: [],
         purchase_conv_unit_id: null,
+        base_unit_id: null,
         preferred_purchase_unit_id: null,
         preferred_pos_unit_id: null,
         control_drug: false,
@@ -59,6 +60,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
         min_inventory_level: null,
         optimal_inventory_level: null,
         max_inventory_level: null,
+        tax_percent: 0,
         allow_below_cost_sale: false,
         allow_price_change: true
     });
@@ -70,6 +72,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                 date: initialData.date ? initialData.date.split('T')[0] : new Date().toISOString().split('T')[0],
                 suppliers: initialData.product_suppliers ? initialData.product_suppliers.map(ps => ps.supplier_id) : [],
                 purchase_conv_unit_id: initialData.purchase_conv_unit_id || '',
+                base_unit_id: initialData.base_unit_id || '',
                 preferred_purchase_unit_id: initialData.preferred_purchase_unit_id || '',
                 preferred_pos_unit_id: initialData.preferred_pos_unit_id || '',
                 active: initialData.active !== undefined ? initialData.active : true, // Ensure active is set
@@ -133,6 +136,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
             const cleanedData = { ...formData };
             const optionalIntFields = [
                 'purchase_conv_unit_id',
+                'base_unit_id',
                 'preferred_purchase_unit_id',
                 'preferred_pos_unit_id',
                 'line_item_id',
@@ -182,12 +186,16 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                         product_group_id: null, category_group_id: null, generics_id: null,
                         cal_season_id: null, manufacturer_id: null, rack_id: null, supplier_id: null,
                         purchase_conv_unit_id: null,
+                        base_unit_id: null,
                         preferred_purchase_unit_id: null,
                         preferred_pos_unit_id: null,
                         control_drug: false, purchase_conv_factor: null,
                         average_cost: null, date: new Date().toISOString().split('T')[0], retail_price: null,
                         active: true, technical_details: '', internal_comments: '', product_type: 1,
                         min_inventory_level: null, optimal_inventory_level: null, max_inventory_level: null,
+                        active: true, technical_details: '', internal_comments: '', product_type: 1,
+                        min_inventory_level: null, optimal_inventory_level: null, max_inventory_level: null,
+                        tax_percent: 0,
                         allow_below_cost_sale: false, allow_price_change: true
                     });
                 }
@@ -429,7 +437,8 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
             <div className="glass-card" style={{ padding: '8px', marginBottom: '24px', display: 'flex', gap: '8px', overflowX: 'auto' }}>
                 <SectionTab id="identity" label="Core Identity" icon={Package} />
                 <SectionTab id="org" label="Classification" icon={Layers} />
-                <SectionTab id="pricing" label="Logistics & Pricing" icon={DollarSign} />
+                <SectionTab id="pricing" label="Pricing" icon={DollarSign} />
+                <SectionTab id="units" label="Units & Taxation" icon={Clipboard} />
                 <SectionTab id="advanced" label="Inventory & Advanced" icon={Settings} />
             </div>
 
@@ -637,9 +646,14 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                 placeholder="Select Secondary Suppliers"
                             />
 
-                            <div className="input-group" style={{ gridColumn: 'span 1' }}>
+                        </div>
+                    )}
+
+                    {activeSection === 'units' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                            <div className="input-group" style={{ gridColumn: '1 / -1' }}>
                                 {/* <label>Conversion Logic</label> */}
-                                <div style={{ display: 'flex', gap: '12px' }}>
+                                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                                     <div style={{ flex: 1 }}>
                                         <SearchableDropdown
                                             label="Bulk Unit"
@@ -651,6 +665,17 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                             entity="purchase-conversion-units"
                                         />
                                     </div>
+                                    <div style={{ flex: 1 }}>
+                                        <SearchableDropdown
+                                            label="Single Unit"
+                                            value={formData.base_unit_id}
+                                            options={purchaseConvUnits}
+                                            searchKey="baseUnit"
+                                            onChange={(id) => setFormData(prev => ({ ...prev, base_unit_id: id }))}
+                                            placeholder="Unit (e.g. Tablet)"
+                                            entity="purchase-conversion-units"
+                                        />
+                                    </div>
                                     <div style={{ width: '100px' }}>
                                         <label>Factor</label>
                                         <input
@@ -659,6 +684,17 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                             className="input-field"
                                             value={formData.purchase_conv_factor || ''}
                                             onChange={(e) => setFormData(prev => ({ ...prev, purchase_conv_factor: e.target.value ? parseInt(e.target.value) : null }))}
+                                        />
+                                    </div>
+                                    <div style={{ width: '120px' }}>
+                                        <label>GST Tax (%)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="0%"
+                                            className="input-field"
+                                            value={formData.tax_percent || ''}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, tax_percent: e.target.value ? parseFloat(e.target.value) : 0 }))}
                                         />
                                     </div>
                                 </div>
@@ -676,9 +712,12 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                     onChange={(e) => setFormData({ ...formData, preferred_purchase_unit_id: e.target.value ? parseInt(e.target.value) : null })}
                                 >
                                     <option value="">Select Purchase Unit</option>
-                                    {purchaseConvUnits.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name}</option>
-                                    ))}
+                                    {purchaseConvUnits
+                                        .filter(u => u.id === formData.purchase_conv_unit_id || u.id === formData.base_unit_id)
+                                        .map(u => (
+                                            <option key={u.id} value={u.id}>{u.name}</option>
+                                        ))
+                                    }
                                 </select>
                             </div>
 
@@ -690,111 +729,118 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                                     onChange={(e) => setFormData({ ...formData, preferred_pos_unit_id: e.target.value ? parseInt(e.target.value) : null })}
                                 >
                                     <option value="">Select POS Unit</option>
-                                    {purchaseConvUnits.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name}</option>
-                                    ))}
+                                    {purchaseConvUnits
+                                        .filter(u => u.id === formData.purchase_conv_unit_id || u.id === formData.base_unit_id)
+                                        .map(u => (
+                                            <option key={u.id} value={u.id}>{u.name}</option>
+                                        ))
+                                    }
                                 </select>
                             </div>
+
                         </div>
-                    )}
+                    )
+                    }
 
-                    {activeSection === 'advanced' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-                            <div className="input-group">
-                                <label>Inventory Thresholds</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                                    <div>
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>MIN</span>
-                                        <input
-                                            type="number" className="input-field" placeholder="10"
-                                            value={formData.min_inventory_level || ''}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, min_inventory_level: parseInt(e.target.value) || null }))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>OPT</span>
-                                        <input
-                                            type="number" className="input-field" placeholder="50"
-                                            value={formData.optimal_inventory_level || ''}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, optimal_inventory_level: parseInt(e.target.value) || null }))}
-                                        />
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--secondary)', display: 'block', marginBottom: '4px' }}>MAX</span>
-                                        <input
-                                            type="number" className="input-field" placeholder="100"
-                                            value={formData.max_inventory_level || ''}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, max_inventory_level: parseInt(e.target.value) || null }))}
-                                        />
+                    {
+                        activeSection === 'advanced' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                                <div className="input-group">
+                                    <label>Inventory Thresholds</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>MIN</span>
+                                            <input
+                                                type="number" className="input-field" placeholder="10"
+                                                value={formData.min_inventory_level || ''}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, min_inventory_level: parseInt(e.target.value) || null }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--primary)', display: 'block', marginBottom: '4px' }}>OPT</span>
+                                            <input
+                                                type="number" className="input-field" placeholder="50"
+                                                value={formData.optimal_inventory_level || ''}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, optimal_inventory_level: parseInt(e.target.value) || null }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: '0.7rem', color: 'var(--secondary)', display: 'block', marginBottom: '4px' }}>MAX</span>
+                                            <input
+                                                type="number" className="input-field" placeholder="100"
+                                                value={formData.max_inventory_level || ''}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, max_inventory_level: parseInt(e.target.value) || null }))}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="input-group">
-                                <label>Product Classification</label>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                    <button
-                                        className={formData.product_type === 1 ? 'btn-primary' : 'btn-secondary'}
-                                        onClick={() => setFormData(prev => ({ ...prev, product_type: 1 }))}
-                                        style={{ height: '44px', fontSize: '0.9rem' }}
-                                    >
-                                        Basic Product
-                                    </button>
-                                    <button
-                                        className={formData.product_type === 2 ? 'btn-primary' : 'btn-secondary'}
-                                        onClick={() => setFormData(prev => ({ ...prev, product_type: 2 }))}
-                                        style={{ height: '44px', fontSize: '0.9rem' }}
-                                    >
-                                        Assembly / Kit
-                                    </button>
+                                <div className="input-group">
+                                    <label>Product Classification</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                        <button
+                                            className={formData.product_type === 1 ? 'btn-primary' : 'btn-secondary'}
+                                            onClick={() => setFormData(prev => ({ ...prev, product_type: 1 }))}
+                                            style={{ height: '44px', fontSize: '0.9rem' }}
+                                        >
+                                            Basic Product
+                                        </button>
+                                        <button
+                                            className={formData.product_type === 2 ? 'btn-primary' : 'btn-secondary'}
+                                            onClick={() => setFormData(prev => ({ ...prev, product_type: 2 }))}
+                                            style={{ height: '44px', fontSize: '0.9rem' }}
+                                        >
+                                            Assembly / Kit
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="input-group">
+                                    <label>Operational Flags</label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                            <input type="checkbox" checked={formData.active} onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))} />
+                                            Active Product
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                            <input type="checkbox" checked={formData.allow_price_change} onChange={(e) => setFormData(prev => ({ ...prev, allow_price_change: e.target.checked }))} />
+                                            Movable Price
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: formData.allow_below_cost_sale ? 'var(--accent)' : 'inherit' }}>
+                                            <input type="checkbox" checked={formData.allow_below_cost_sale} onChange={(e) => setFormData(prev => ({ ...prev, allow_below_cost_sale: e.target.checked }))} />
+                                            Below Cost Sale
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="input-group" style={{ gridColumn: 'span 1' }}>
+                                    <label>Technical Specifications</label>
+                                    <textarea
+                                        className="input-field"
+                                        rows={3}
+                                        placeholder="Chemical composition, storage rules..."
+                                        value={formData.technical_details}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, technical_details: e.target.value }))}
+                                    />
+                                </div>
+
+                                <div className="input-group" style={{ gridColumn: 'span 1' }}>
+                                    <label>Internal Remarks</label>
+                                    <textarea
+                                        className="input-field"
+                                        rows={3}
+                                        placeholder="Notes for staff..."
+                                        value={formData.internal_comments}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, internal_comments: e.target.value }))}
+                                    />
                                 </div>
                             </div>
-
-                            <div className="input-group">
-                                <label>Operational Flags</label>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', background: 'rgba(255,255,255,0.03)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                        <input type="checkbox" checked={formData.active} onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))} />
-                                        Active Product
-                                    </label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                                        <input type="checkbox" checked={formData.allow_price_change} onChange={(e) => setFormData(prev => ({ ...prev, allow_price_change: e.target.checked }))} />
-                                        Movable Price
-                                    </label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: formData.allow_below_cost_sale ? 'var(--accent)' : 'inherit' }}>
-                                        <input type="checkbox" checked={formData.allow_below_cost_sale} onChange={(e) => setFormData(prev => ({ ...prev, allow_below_cost_sale: e.target.checked }))} />
-                                        Below Cost Sale
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className="input-group" style={{ gridColumn: 'span 1' }}>
-                                <label>Technical Specifications</label>
-                                <textarea
-                                    className="input-field"
-                                    rows={3}
-                                    placeholder="Chemical composition, storage rules..."
-                                    value={formData.technical_details}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, technical_details: e.target.value }))}
-                                />
-                            </div>
-
-                            <div className="input-group" style={{ gridColumn: 'span 1' }}>
-                                <label>Internal Remarks</label>
-                                <textarea
-                                    className="input-field"
-                                    rows={3}
-                                    placeholder="Notes for staff..."
-                                    value={formData.internal_comments}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, internal_comments: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
+                        )
+                    }
+                </div >
 
                 {/* Footer Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', marginTop: '12px' }}>
+                < div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', marginTop: '12px' }}>
                     <button
                         className="btn-secondary"
                         style={{ padding: '14px 28px' }}
@@ -814,11 +860,11 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                             <><Save size={20} /> {formData.id ? 'Authorize Updates' : 'Commit Product'}</>
                         )}
                     </button>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {/* Legend / Info */}
-            <div style={{ marginTop: '40px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            < div style={{ marginTop: '40px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                     <Info size={14} />
                     <span>Red asterisks indicate required fields.</span>
@@ -827,7 +873,7 @@ const ProductDefinition = ({ tenantId, initialData, onSaveSuccess }) => {
                     <Search size={14} />
                     <span>Searchable dropdowns support adding new items on the fly.</span>
                 </div>
-            </div>
+            </div >
         </div >
     );
 };

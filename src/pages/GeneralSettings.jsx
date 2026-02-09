@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Building, Phone, FileText, Globe, Mail, MapPin, Upload, Palette, Settings } from 'lucide-react';
+import { Save, Building, Phone, FileText, Globe, Mail, MapPin, Upload, Palette, Settings, Receipt, Printer, CheckCircle } from 'lucide-react';
 import { API_BASE_URL, appSettingsAPI } from '../services/api';
 
 const themes = {
@@ -38,7 +38,8 @@ const GeneralSettings = ({ tenantId }) => {
         theme_config: themes.dark // Default
     });
     const [appSettings, setAppSettings] = useState({
-        default_listing_rows: 10
+        default_listing_rows: 10,
+        sale_module: 'FIFO'
     });
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -91,8 +92,9 @@ const GeneralSettings = ({ tenantId }) => {
         setLoading(true);
         setMsg('');
         try {
-            const endpoint = activeTab === 'app' ? '/app-settings' : '/settings';
-            const bodyData = activeTab === 'app' ? appSettings : settings;
+            const isAppSetting = activeTab === 'app' || activeTab === 'invoice';
+            const endpoint = isAppSetting ? '/app-settings' : '/settings';
+            const bodyData = isAppSetting ? appSettings : settings;
 
             const res = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'PUT',
@@ -147,6 +149,9 @@ const GeneralSettings = ({ tenantId }) => {
                 <button onClick={() => setActiveTab('app')} style={tabStyle(activeTab === 'app')}>
                     <Settings size={18} /> App Settings
                 </button>
+                <button onClick={() => setActiveTab('invoice')} style={tabStyle(activeTab === 'invoice')}>
+                    <FileText size={18} /> Invoice Template
+                </button>
             </div>
 
             {/* Content Area */}
@@ -156,11 +161,13 @@ const GeneralSettings = ({ tenantId }) => {
                     <div>
                         <h2 style={{ margin: 0, fontSize: '1.5rem' }}>
                             {activeTab === 'about' ? 'General Settings' :
-                                activeTab === 'theme' ? 'Theme Settings' : 'App Settings'}
+                                activeTab === 'theme' ? 'Theme Settings' :
+                                    activeTab === 'app' ? 'App Settings' : 'Invoice Template'}
                         </h2>
                         <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
                             {activeTab === 'about' ? 'Manage public profile and legal info.' :
-                                activeTab === 'theme' ? 'Customize the look and feel of your app.' : 'Configure global application behavior.'}
+                                activeTab === 'theme' ? 'Customize the look and feel of your app.' :
+                                    activeTab === 'app' ? 'Configure global application behavior.' : 'Select and customize your POS receipt template.'}
                         </p>
                     </div>
                     <button onClick={handleSave} className="btn-primary" disabled={loading} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -323,6 +330,375 @@ const GeneralSettings = ({ tenantId }) => {
                             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
                                 This controls the number of items displayed by default in tables like Stock, Products, and Invoices.
                             </p>
+                        </div>
+
+                        <div className="input-group" style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Settings size={18} /> Sale Module (Inventory Method)
+                            </label>
+                            <select
+                                className="input-field"
+                                style={{ padding: '12px', fontSize: '1rem', background: 'rgba(255,255,255,0.05)', color: 'white', borderRadius: '8px', border: '1px solid var(--border)', width: '100%' }}
+                                value={appSettings.sale_module || 'FIFO'}
+                                onChange={e => setAppSettings({ ...appSettings, sale_module: e.target.value })}
+                            >
+                                <option value="Default" style={{ background: '#1e293b' }}>Default (Batch-wise)</option>
+                                <option value="FIFO" style={{ background: '#1e293b' }}>FIFO (First-In, First-Out)</option>
+                                <option value="FEFO" style={{ background: '#1e293b' }}>FEFO (First-Expiry, First-Out)</option>
+                                <option value="Avg Cost" style={{ background: '#1e293b' }}>Avg Cost (Average Costing)</option>
+                            </select>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                This determines how items are selected and costed during sale. Default shows all batches individually in POS lookup. FIFO/FEFO group products and auto-select batches.
+                            </p>
+                        </div>
+
+                        <div className="input-group" style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={appSettings.stock_adj_batch_required || false}
+                                    onChange={e => setAppSettings({ ...appSettings, stock_adj_batch_required: e.target.checked })}
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                <span style={{ fontSize: '1rem', color: 'white' }}>Batch no. required on stock adjustment</span>
+                            </label>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px', marginLeft: '28px' }}>
+                                If checked, you must select a specific batch for every inventory adjustment. If unchecked, the system will apply adjustments to the latest batches automatically.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'invoice' && (
+                    <div style={{ display: 'flex', gap: '40px' }}>
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ marginBottom: '20px' }}>Select Template</h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '32px' }}>
+                                {[
+                                    { id: 'default', name: 'Standard Receipt', icon: <Receipt size={24} />, desc: '72mm Standard POS' },
+                                    { id: 'clinix', name: 'Clinix Style', icon: <Building size={24} />, desc: 'High-Fidelity Demo' },
+                                    { id: 'detailed', name: 'Detailed A4', icon: <FileText size={24} />, desc: 'Prescription Layout' },
+                                    { id: 'custom', name: 'Custom Builder', icon: <Palette size={24} />, desc: 'Design your own' }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => {
+                                            const currentConfig = appSettings.invoice_custom_config || {};
+                                            const newConfig = { ...currentConfig };
+
+                                            if (t.id === 'clinix') {
+                                                newConfig.showMRP = true;
+                                                newConfig.showGST = true;
+                                                newConfig.showCashier = true;
+                                                newConfig.showMode = true;
+                                                newConfig.showRemarks = true;
+                                                newConfig.headerAlign = 'center';
+                                            }
+
+                                            setAppSettings(prev => ({
+                                                ...prev,
+                                                invoice_template_id: t.id,
+                                                invoice_custom_config: newConfig
+                                            }));
+                                        }}
+                                        style={{
+                                            padding: '20px',
+                                            borderRadius: '12px',
+                                            border: `2px solid ${appSettings.invoice_template_id === t.id ? 'var(--primary)' : 'var(--border)'}`,
+                                            background: appSettings.invoice_template_id === t.id ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                            cursor: 'pointer',
+                                            textAlign: 'left',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '16px',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <div style={{ color: appSettings.invoice_template_id === t.id ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                                            {t.id === 'clinix' ? <Building size={24} /> : t.icon}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', color: 'white' }}>{t.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{t.desc}</div>
+                                        </div>
+                                        {appSettings.invoice_template_id === t.id && (
+                                            <div style={{ position: 'absolute', top: '8px', right: '8px', color: 'var(--primary)' }}>
+                                                <CheckCircle size={16} />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <h3 style={{ marginBottom: '20px' }}>Customization</h3>
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '16px',
+                                opacity: (appSettings.invoice_template_id === 'custom' || appSettings.invoice_template_id === 'clinix') ? 1 : 0.7,
+                                transition: 'opacity 0.3s'
+                            }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                    <div className="input-group">
+                                        <label>Receipt Font Size (px)</label>
+                                        <input
+                                            type="number"
+                                            value={appSettings.invoice_custom_config?.fontSize || 12}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, fontSize: parseInt(e.target.value) }
+                                            })}
+                                        />
+                                    </div>
+                                    <div className="input-group">
+                                        <label>Header Alignment</label>
+                                        <select
+                                            value={appSettings.invoice_custom_config?.headerAlign || 'center'}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, headerAlign: e.target.value }
+                                            })}
+                                            style={{ background: 'rgba(255,255,255,0.05)', color: 'white', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)' }}
+                                        >
+                                            <option value="left" style={{ background: '#1e293b' }}>Left</option>
+                                            <option value="center" style={{ background: '#1e293b' }}>Center</option>
+                                            <option value="right" style={{ background: '#1e293b' }}>Right</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showLogo !== false}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showLogo: e.target.checked }
+                                            })}
+                                        />
+                                        Show Logo
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showTagline !== false}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showTagline: e.target.checked }
+                                            })}
+                                        />
+                                        Show Tagline
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showCashier !== false}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showCashier: e.target.checked }
+                                            })}
+                                        />
+                                        Show Cashier
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showRemarks !== false}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showRemarks: e.target.checked }
+                                            })}
+                                        />
+                                        Show Remarks
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showMRP === true}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showMRP: e.target.checked }
+                                            })}
+                                        />
+                                        Show MRP
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={appSettings.invoice_custom_config?.showGST === true}
+                                            onChange={e => setAppSettings({
+                                                ...appSettings,
+                                                invoice_custom_config: { ...appSettings.invoice_custom_config, showGST: e.target.checked }
+                                            })}
+                                        />
+                                        Show GST %
+                                    </label>
+                                </div>
+
+                                <div className="input-group">
+                                    <label>Custom Header Text (Optional)</label>
+                                    <input
+                                        type="text"
+                                        value={appSettings.invoice_custom_config?.customHeader || ''}
+                                        onChange={e => setAppSettings({
+                                            ...appSettings,
+                                            invoice_custom_config: { ...appSettings.invoice_custom_config, customHeader: e.target.value }
+                                        })}
+                                        placeholder="e.g. WELCOME TO OUR PHARMACY"
+                                    />
+                                </div>
+
+                                <div className="input-group">
+                                    <label>Custom Footer Message</label>
+                                    <textarea
+                                        rows="2"
+                                        value={appSettings.invoice_custom_config?.customFooter || 'Thank you for your visit!'}
+                                        onChange={e => setAppSettings({
+                                            ...appSettings,
+                                            invoice_custom_config: { ...appSettings.invoice_custom_config, customFooter: e.target.value }
+                                        })}
+                                        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '8px', color: 'white', padding: '10px' }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Live Preview */}
+                        <div style={{ width: '320px' }}>
+                            <h3 style={{ marginBottom: '20px' }}>Live Preview</h3>
+                            <div style={{
+                                background: 'white',
+                                color: 'black',
+                                padding: '20px',
+                                borderRadius: '4px',
+                                minHeight: '450px',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                                fontSize: `${appSettings.invoice_custom_config?.fontSize || 12}px`,
+                                fontFamily: appSettings.invoice_template_id === 'detailed' ? 'serif' : 'monospace',
+                                border: ['clinix', 'default'].includes(appSettings.invoice_template_id) ? '2px solid #000' : 'none',
+                                overflow: 'hidden'
+                            }}>
+                                {!['clinix', 'default'].includes(appSettings.invoice_template_id) && (
+                                    <>
+                                        <div style={{ textAlign: appSettings.invoice_custom_config?.headerAlign || 'center', borderBottom: '1px dashed #ccc', paddingBottom: '10px', marginBottom: '10px' }}>
+                                            {appSettings.invoice_custom_config?.showLogo !== false && (
+                                                <div style={{ fontWeight: 'bold', fontSize: '1.2em' }}>{settings.logo_url ? '[LOGO]' : '[PHARMACY LOGO]'}</div>
+                                            )}
+                                            <div style={{ fontWeight: 'bold', fontSize: '1.1em' }}>{settings.name || 'CITY CARE PHARMACY'}</div>
+                                            {appSettings.invoice_custom_config?.showTagline !== false && (
+                                                <div style={{ fontSize: '0.8em', fontStyle: 'italic' }}>{settings.tagline || 'Caring for your health'}</div>
+                                            )}
+                                            {appSettings.invoice_custom_config?.customHeader && (
+                                                <div style={{ marginTop: '5px', fontSize: '0.9em', border: '1px solid #ddd', padding: '2px' }}>{appSettings.invoice_custom_config.customHeader}</div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ fontSize: '0.9em', marginBottom: '10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Inv: #INV-001</span>
+                                                <span>POS: #123</span>
+                                            </div>
+                                            {appSettings.invoice_custom_config?.showCashier !== false && <div>Cashier: Admin</div>}
+                                            <div style={{ fontWeight: 'bold' }}>Customer: Walk-in Customer</div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {(appSettings.invoice_template_id === 'clinix' || appSettings.invoice_template_id === 'default') ? (
+                                    <div style={{ fontSize: '0.85em', fontFamily: "'Arial Narrow', sans-serif" }}>
+                                        {/* Clinix Header Preview */}
+                                        <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+                                            {settings.logo_url && <img src={settings.logo_url} style={{ maxWidth: '100%', maxHeight: '50px' }} alt="Logo" />}
+                                            <div style={{ background: 'black', color: 'white', padding: '2px 0', fontWeight: 'bold', fontSize: '0.9em', margin: '4px 0' }}>{settings.tagline || 'THE MEDICINE SUPERSTORE'}</div>
+                                            <div>{settings.name || 'Bukhtiari Pharmacy'}</div>
+                                            <div style={{ fontSize: '0.9em' }}>{settings.address || 'Amna Plaza Block#16...'}</div>
+                                            <div style={{ fontSize: '0.9em' }}>Ph: 065-2554412</div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                            <span>No. 6459</span>
+                                            <span>{new Date().toLocaleDateString('en-GB')}</span>
+                                        </div>
+                                        <div style={{ marginBottom: '2px' }}>M/s: WALKING CUSTOMER A/C</div>
+                                        <div style={{ marginBottom: '8px' }}>Remarks: ADMIN</div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 30px 40px 50px', fontWeight: 'bold', borderTop: '1px solid black', borderBottom: '1px solid black', padding: '3px 0', marginBottom: '5px' }}>
+                                            <span>Item Name</span><span style={{ textAlign: 'center' }}>Qty</span><span style={{ textAlign: 'center' }}>Price</span><span style={{ textAlign: 'right' }}>Total</span>
+                                        </div>
+                                        {[1, 2].map(i => (
+                                            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 30px 40px 50px', marginBottom: '4px' }}>
+                                                <div>
+                                                    <div>Sample Product {i}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'center' }}>1</div>
+                                                <div style={{ textAlign: 'center' }}>620.00</div>
+                                                <div style={{ textAlign: 'right' }}>620.00</div>
+                                            </div>
+                                        ))}
+
+                                        <div style={{ borderTop: '1px solid black', marginTop: '5px', paddingTop: '5px' }}>
+                                            <div>Total items: 2</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px' }}>
+                                                <span>Gross Total :</span>
+                                                <span>1240.00</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', marginTop: '10px', fontSize: '1.1em' }}>
+                                                <span>{/* Cashier Name Removed */}</span>
+                                                <span>Net Total.</span>
+                                                <span>1240.00</span>
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            fontSize: '0.7em',
+                                            textAlign: 'center',
+                                            marginTop: '15px',
+                                            borderTop: '1px solid #000',
+                                            paddingTop: '5px'
+                                        }}>
+                                            (Computer Software developed by Antigravity AI<br /> Ph 042-3742xxx-xx)
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{ borderBottom: '1px dashed #ccc', marginBottom: '5px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Item Name</span>
+                                            <span>Total</span>
+                                        </div>
+                                        {[1, 2].map(i => (
+                                            <div key={i} style={{ marginBottom: '8px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <span>Sample Item {i}</span>
+                                                    <span>100.00</span>
+                                                </div>
+                                                <div style={{ fontSize: '0.8em', opacity: 0.6 }}>100.00 x 1</div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+
+                                <div style={{ borderTop: '1px dashed #ccc', marginTop: '10px', paddingTop: '5px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Sub Total:</span>
+                                        <span>200.00</span>
+                                    </div>
+                                    {appSettings.invoice_custom_config?.showGST && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>GST (18%):</span>
+                                            <span>36.00</span>
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.2em', marginTop: '5px', borderTop: '1px solid #000', paddingTop: '3px' }}>
+                                        <span>TOTAL</span>
+                                        <span>{appSettings.invoice_custom_config?.showGST ? '236.00' : '200.00'}</span>
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.9em', borderTop: '1px dashed #eee', paddingTop: '10px' }}>
+                                    {appSettings.invoice_custom_config?.customFooter || 'Thank you for your visit!'}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

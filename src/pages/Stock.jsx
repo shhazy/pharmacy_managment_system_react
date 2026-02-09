@@ -5,27 +5,28 @@ import { showSuccess, showError } from '../utils/toast';
 import PaginationControls from '../components/PaginationControls';
 
 const Stock = ({ tenant }) => {
-    const [stockItems, setStockItems] = useState([]);
+    const [stockSummary, setStockSummary] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState(null);
     const [newPrices, setNewPrices] = useState({ selling_price: 0, unit_cost: 0 });
-    const [sortConfig, setSortConfig] = useState({ key: 'inventory_id', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'product_name', direction: 'asc' });
 
     // New states for grouping and pagination
-    const [showHistory, setShowHistory] = useState(false);
     const [expandedProducts, setExpandedProducts] = useState(new Set());
+    const [productBatches, setProductBatches] = useState({}); // { productId: [batches] }
+    const [loadingBatches, setLoadingBatches] = useState({}); // { productId: true/false }
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
-        fetchStock();
+        fetchStockSummary();
     }, [tenant]);
 
-    const fetchStock = async () => {
+    const fetchStockSummary = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/inventory/stock`, {
+            const res = await fetch(`${API_BASE_URL}/inventory/stock-summary`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                     'X-Tenant-ID': tenant
@@ -33,12 +34,32 @@ const Stock = ({ tenant }) => {
             });
             if (res.ok) {
                 const data = await res.json();
-                setStockItems(data);
+                setStockSummary(data);
             }
         } catch (err) {
             console.error("Fetch failed", err);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const fetchBatches = async (productId) => {
+        setLoadingBatches(prev => ({ ...prev, [productId]: true }));
+        try {
+            const res = await fetch(`${API_BASE_URL}/inventory/product/${productId}/batches`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'X-Tenant-ID': tenant
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setProductBatches(prev => ({ ...prev, [productId]: data }));
+            }
+        } catch (err) {
+            console.error("Batches fetch failed", err);
+        } finally {
+            setLoadingBatches(prev => ({ ...prev, [productId]: false }));
         }
     };
 
@@ -55,7 +76,8 @@ const Stock = ({ tenant }) => {
             });
             if (res.ok) {
                 setEditingItem(null);
-                fetchStock();
+                fetchStockSummary();
+                if (editingItem.product_id) fetchBatches(editingItem.product_id);
                 showSuccess("Prices updated successfully!");
             } else {
                 showError("Failed to update prices");
@@ -73,56 +95,26 @@ const Stock = ({ tenant }) => {
                 newSet.delete(productId);
             } else {
                 newSet.add(productId);
+                if (!productBatches[productId]) {
+                    fetchBatches(productId);
+                }
             }
             return newSet;
         });
     };
 
-    // Group stock items by product
-    const groupedStock = useMemo(() => {
-        const groups = {};
-
-        stockItems.forEach(item => {
-            const productId = item.product_id || item.product_name;
-            if (!groups[productId]) {
-                groups[productId] = {
-                    product_id: productId,
-                    product_name: item.product_name,
-                    batches: [],
-                    totalUnits: 0,
-                    totalPacks: 0
-                };
-            }
-            groups[productId].batches.push(item);
-            groups[productId].totalUnits += item.quantity || 0;
-            groups[productId].totalPacks += (item.quantity || 0) / (item.purchase_conv_factor || 1);
-        });
-
-        // Sort batches by created_at desc (latest first)
-        Object.values(groups).forEach(group => {
-            group.batches.sort((a, b) => {
-                const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-                const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-                return dateB - dateA;
-            });
-            group.latestBatch = group.batches[0];
-        });
-
-        return Object.values(groups);
-    }, [stockItems]);
-
-    // Filter by search term
-    const filteredGroups = groupedStock.filter(group =>
-        group.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        group.batches.some(b =>
+    // Filter summary by search term
+    const filteredSummary = stockSummary.filter(item =>
+        item.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (productBatches[item.product_id] || []).some(b =>
             b.batch_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
             b.supplier_name.toLowerCase().includes(searchTerm.toLowerCase())
         )
     );
 
     // Pagination
-    const totalPages = Math.ceil(filteredGroups.length / pageSize);
-    const paginatedGroups = filteredGroups.slice(
+    const totalPages = Math.ceil(filteredSummary.length / pageSize);
+    const paginatedSummary = filteredSummary.slice(
         (currentPage - 1) * pageSize,
         currentPage * pageSize
     );
@@ -157,34 +149,12 @@ const Stock = ({ tenant }) => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-
-                {/* Show History Toggle */}
-                <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '0 16px',
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '10px',
-                    color: 'var(--text-primary)',
-                    cursor: 'pointer',
-                    height: '48px'
-                }}>
-                    <input
-                        type="checkbox"
-                        checked={showHistory}
-                        onChange={(e) => setShowHistory(e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Show History</span>
-                </label>
             </div>
 
             <div className="glass-card" style={{ padding: '0', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {isLoading ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading stock records...</div>
-                ) : filteredGroups.length === 0 ? (
+                ) : filteredSummary.length === 0 ? (
                     <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>No matching stock records found.</div>
                 ) : (
                     <>
@@ -193,12 +163,14 @@ const Stock = ({ tenant }) => {
                                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                     <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
                                         <th style={{ padding: '16px', width: '30px', background: 'var(--surface)' }}></th>
-                                        <th style={{ padding: '16px', background: 'var(--surface)' }}>Product</th>
-                                        <th style={{ padding: '16px', background: 'var(--surface)' }}>Batch #</th>
+                                        <th style={{ padding: '16px', background: 'var(--surface)' }} onClick={() => requestSort('product_name')}>
+                                            Product <SortIcon column="product_name" />
+                                        </th>
+                                        <th style={{ padding: '16px', background: 'var(--surface)' }}>Latest Batch</th>
                                         <th style={{ padding: '16px', background: 'var(--surface)' }}>Expiry</th>
                                         <th style={{ padding: '16px', background: 'var(--surface)' }}>Created</th>
-                                        <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Units</th>
-                                        <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Packs</th>
+                                        <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Total Units</th>
+                                        <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Total Packs</th>
                                         <th style={{ padding: '16px', textAlign: 'center', background: 'var(--surface)' }}>Factor</th>
                                         <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Cost</th>
                                         <th style={{ padding: '16px', textAlign: 'right', background: 'var(--surface)' }}>Price</th>
@@ -207,76 +179,74 @@ const Stock = ({ tenant }) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {paginatedGroups.map((group) => {
-                                        const isExpanded = expandedProducts.has(group.product_id);
-                                        const hasMultipleBatches = group.batches.length > 1;
-                                        const displayBatches = showHistory ? group.batches : [group.latestBatch];
+                                    {paginatedSummary.map((item) => {
+                                        const isExpanded = expandedProducts.has(item.product_id);
+                                        const batches = productBatches[item.product_id] || [];
+                                        const isLoadingThis = loadingBatches[item.product_id];
+                                        const latest = item.latest_batch;
 
                                         return (
-                                            <React.Fragment key={group.product_id}>
+                                            <React.Fragment key={item.product_id}>
                                                 {/* Main Product Row */}
                                                 <tr style={{
                                                     borderBottom: '1px solid var(--border)',
-                                                    background: hasMultipleBatches && showHistory ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
+                                                    background: isExpanded ? 'rgba(99, 102, 241, 0.05)' : 'transparent',
                                                     transition: 'background 0.2s'
                                                 }} className="table-row">
                                                     <td style={{ padding: '16px' }}>
-                                                        {hasMultipleBatches && showHistory && (
-                                                            <button
-                                                                onClick={() => toggleProduct(group.product_id)}
-                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 0 }}
-                                                            >
-                                                                {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                                                            </button>
-                                                        )}
+                                                        <button
+                                                            onClick={() => toggleProduct(item.product_id)}
+                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 0 }}
+                                                        >
+                                                            {isLoadingThis ? (
+                                                                <div className="spinner-small" style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                                            ) : isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                                        </button>
                                                     </td>
                                                     <td style={{ padding: '16px', fontWeight: '600' }}>
-                                                        {group.product_name}
-                                                        {hasMultipleBatches && showHistory && (
-                                                            <span style={{ marginLeft: '8px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                                                ({group.batches.length} batches)
-                                                            </span>
-                                                        )}
+                                                        {item.product_name}
                                                     </td>
-                                                    <td style={{ padding: '16px', fontSize: '0.85rem' }}>{group.latestBatch.batch_number}</td>
+                                                    <td style={{ padding: '16px', fontSize: '0.85rem' }}>{latest?.batch_number || 'N/A'}</td>
                                                     <td style={{ padding: '16px', fontSize: '0.85rem' }}>
-                                                        {group.latestBatch.expiry_date ? new Date(group.latestBatch.expiry_date).toLocaleDateString() : 'N/A'}
+                                                        {latest?.expiry_date ? new Date(latest.expiry_date).toLocaleDateString() : 'N/A'}
                                                     </td>
                                                     <td style={{ padding: '16px', fontSize: '0.85rem' }}>
-                                                        {group.latestBatch.created_at ? new Date(group.latestBatch.created_at).toLocaleDateString() : 'N/A'}
+                                                        {latest?.created_at ? new Date(latest.created_at).toLocaleDateString() : 'N/A'}
                                                     </td>
                                                     <td style={{ padding: '16px', textAlign: 'right' }}>
-                                                        <span style={{ fontWeight: '700', color: group.totalUnits < 20 ? '#f43f5e' : '#10b981' }}>
-                                                            {showHistory ? group.totalUnits : group.latestBatch.quantity}
+                                                        <span style={{ fontWeight: '700', color: item.total_quantity < 20 ? '#f43f5e' : '#10b981' }}>
+                                                            {item.total_quantity}
                                                         </span>
                                                     </td>
                                                     <td style={{ padding: '16px', textAlign: 'right', color: 'var(--text-secondary)' }}>
-                                                        {showHistory ? group.totalPacks.toFixed(2) : (group.latestBatch.quantity / (group.latestBatch.purchase_conv_factor || 1)).toFixed(2)}
+                                                        {(item.total_quantity / (item.purchase_conv_factor || 1)).toFixed(2)}
                                                     </td>
-                                                    <td style={{ padding: '16px', textAlign: 'center' }}>{group.latestBatch.purchase_conv_factor}</td>
-                                                    <td style={{ padding: '16px', textAlign: 'right' }}>{group.latestBatch.unit_cost?.toFixed(2)}</td>
-                                                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>{group.latestBatch.selling_price?.toFixed(2)}</td>
-                                                    <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{group.latestBatch.supplier_name}</td>
+                                                    <td style={{ padding: '16px', textAlign: 'center' }}>{item.purchase_conv_factor}</td>
+                                                    <td style={{ padding: '16px', textAlign: 'right' }}>{latest?.unit_cost?.toFixed(2) || '0.00'}</td>
+                                                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>{latest?.selling_price?.toFixed(2) || '0.00'}</td>
+                                                    <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{latest?.supplier_name || 'N/A'}</td>
                                                     <td style={{ padding: '16px', textAlign: 'center' }}>
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingItem(group.latestBatch);
-                                                                setNewPrices({ selling_price: group.latestBatch.selling_price, unit_cost: group.latestBatch.unit_cost });
-                                                            }}
-                                                            style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
-                                                            title="Edit Prices"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
+                                                        {latest && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingItem(latest);
+                                                                    setNewPrices({ selling_price: latest.selling_price, unit_cost: latest.unit_cost });
+                                                                }}
+                                                                style={{ background: 'transparent', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}
+                                                                title="Edit Prices"
+                                                            >
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
 
                                                 {/* Expanded Batch Rows */}
-                                                {hasMultipleBatches && showHistory && isExpanded && group.batches.slice(1).map((batch, index) => (
+                                                {isExpanded && batches.map((batch, index) => (
                                                     <tr key={batch.inventory_id} style={{ borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
                                                         <td style={{ padding: '16px' }}></td>
                                                         <td style={{ padding: '12px 16px 12px 48px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                                            └─ Batch {index + 2}
+                                                            └─ Batch {index + 1}
                                                         </td>
                                                         <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>{batch.batch_number}</td>
                                                         <td style={{ padding: '12px 16px', fontSize: '0.85rem' }}>
@@ -320,7 +290,7 @@ const Stock = ({ tenant }) => {
                             currentPage={currentPage}
                             totalPages={totalPages}
                             pageSize={pageSize}
-                            totalItems={filteredGroups.length}
+                            totalItems={filteredSummary.length}
                             onPageChange={setCurrentPage}
                             onPageSizeChange={(newSize) => {
                                 setPageSize(newSize);

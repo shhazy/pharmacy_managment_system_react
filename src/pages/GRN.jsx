@@ -24,6 +24,7 @@ const GRN = ({ tenantId }) => {
     const [selectedPO, setSelectedPO] = useState('');
     const [showHelp, setShowHelp] = useState(false);
     const [allInventory, setAllInventory] = useState([]);
+    const [appSettings, setAppSettings] = useState({});
 
     const [header, setHeader] = useState({
         invoiceNo: '',
@@ -64,6 +65,17 @@ const GRN = ({ tenantId }) => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
+
+    // Fetch initial data
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tenants/${tenantId}/settings`);
+                if (res.ok) setAppSettings(await res.json());
+            } catch (e) { console.error("Failed to load settings"); }
+        };
+        fetchData();
+    }, [tenantId]);
 
     // --- Handlers ---
     const handleSearchInput = async (val) => {
@@ -1033,6 +1045,7 @@ const GRN = ({ tenantId }) => {
                     setShowHelp(false);
                 }}
                 products={allInventory}
+                inventoryMethod={appSettings.sale_module || 'FIFO'}
             />
 
             <ConfirmDialog

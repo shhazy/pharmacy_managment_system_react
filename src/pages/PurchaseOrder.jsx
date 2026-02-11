@@ -48,6 +48,7 @@ const PurchaseOrder = ({ tenantId }) => {
     const [conversionUnits, setConversionUnits] = useState([]);
     const [activeTab, setActiveTab] = useState('Purchase Order'); // Purchase Order, Records
     const [editingPoId, setEditingPoId] = useState(null);
+    const [appSettings, setAppSettings] = useState({});
     // { supplier_id: po_id }
 
     // Custom Confirmation State
@@ -168,6 +169,12 @@ const PurchaseOrder = ({ tenantId }) => {
                 const inv = await inventoryAPI.getInventory(tenantId);
                 setAllInventory(Array.isArray(inv) ? inv : []);
             } catch (err) { console.error("Error fetching inventory for F3", err); }
+
+            // Fetch App Settings
+            try {
+                const res = await fetch(`${API_BASE_URL}/tenants/${tenantId}/settings`);
+                if (res.ok) setAppSettings(await res.json());
+            } catch (e) { console.error("Failed to load settings"); }
         };
         fetchInitialData();
     }, [tenantId]);
@@ -1398,6 +1405,7 @@ const PurchaseOrder = ({ tenantId }) => {
                 onClose={() => setShowHelp(false)}
                 onSelect={handleProductSelect}
                 products={allInventory}
+                inventoryMethod={appSettings.sale_module || 'FIFO'}
             />
 
             <ConfirmDialog

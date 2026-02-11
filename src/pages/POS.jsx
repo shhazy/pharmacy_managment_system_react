@@ -878,10 +878,41 @@ const POS = ({ tenantId }) => {
         }, 500);
     };
 
+    // Helper function to sort batches based on sale_module setting
+    const sortBatches = (batches, method) => {
+        if (!batches || batches.length === 0) return [];
+        const sorted = [...batches].filter(b => b.quantity > 0);
+
+        if (method === 'FIFO') {
+            // First In, First Out - sort by created_at or id (oldest first)
+            return sorted.sort((a, b) => {
+                const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+                const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+                return dateA - dateB || (a.id || 0) - (b.id || 0);
+            });
+        } else if (method === 'FEFO') {
+            // First Expired, First Out - sort by expiry_date (earliest expiry first)
+            return sorted.sort((a, b) => {
+                const dateA = a.expiry_date ? new Date(a.expiry_date) : new Date('9999-12-31');
+                const dateB = b.expiry_date ? new Date(b.expiry_date) : new Date('9999-12-31');
+                return dateA - dateB;
+            });
+        }
+        // Default - show all batches as-is
+        return sorted;
+    };
+
+    const saleModule = appSettings.sale_module || 'FIFO';
+    const isGroupedMode = saleModule !== 'Default';
+
     const filteredMedicines = (medicines || []).filter(m =>
         m.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         m.generic_name.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 10);
+    ).slice(0, 10).map(m => {
+        // Sort batches according to the sale module setting
+        const sortedBatches = sortBatches(m.stock_inventory || [], saleModule);
+        return { ...m, stock_inventory: sortedBatches };
+    });
 
 
 
@@ -947,29 +978,64 @@ const POS = ({ tenantId }) => {
                                         position: 'absolute', top: '100%', left: 0, right: 0,
                                         background: 'var(--surface)', border: '1px solid var(--border)',
                                         borderRadius: '12px', marginTop: '8px', zIndex: 1000, boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                                        overflow: 'hidden'
+                                        overflow: 'hidden', maxHeight: '400px', overflowY: 'auto'
                                     }}>
-                                        {(filteredMedicines || []).map(m => (m.stock_inventory || []).filter(b => b.quantity > 0).map(b => (
-                                            <div
-                                                key={`${m.id}-${b.inventory_id}`}
-                                                style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}
-                                                onClick={() => {
-                                                    addToCart(m, b);
-                                                    setSearchTerm('');
-                                                }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                            >
-                                                <div>
-                                                    <div style={{ fontWeight: 600 }}>{m.product_name} - {b.batch_number}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{m.generic_name}</div>
+                                        {isGroupedMode ? (
+                                            // Grouped Mode (FIFO/FEFO): Show product with auto-batch selection
+                                            filteredMedicines.map(m => {
+                                                const batches = m.stock_inventory || [];
+                                                if (batches.length === 0) return null;
+                                                const firstBatch = batches[0]; // Auto-selected batch
+                                                const totalStock = batches.reduce((sum, b) => sum + b.quantity, 0);
+
+                                                return (
+                                                    <div
+                                                        key={m.id}
+                                                        style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}
+                                                        onClick={() => {
+                                                            addToCart(m, null); // null batch triggers auto-selection in addToCart
+                                                            setSearchTerm('');
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    >
+                                                        <div>
+                                                            <div style={{ fontWeight: 600 }}>{m.product_name}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                                {m.generic_name} • {batches.length} batch(es) • Auto: {saleModule}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Rs. {firstBatch.selling_price || firstBatch.sale_price}</div>
+                                                            <div style={{ fontSize: '0.75rem', color: '#10b981' }}>{totalStock} in stock</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            // Default Mode: Show all batches individually
+                                            filteredMedicines.map(m => (m.stock_inventory || []).map(b => (
+                                                <div
+                                                    key={`${m.id}-${b.inventory_id}`}
+                                                    style={{ padding: '12px 20px', cursor: 'pointer', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}
+                                                    onClick={() => {
+                                                        addToCart(m, b);
+                                                        setSearchTerm('');
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <div>
+                                                        <div style={{ fontWeight: 600 }}>{m.product_name} - {b.batch_number}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{m.generic_name}</div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Rs. {b.selling_price || b.sale_price}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#10b981' }}>{b.quantity} in stock</div>
+                                                    </div>
                                                 </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Rs. {b.selling_price}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: '#10b981' }}>{b.quantity} in stock</div>
-                                                </div>
-                                            </div>
-                                        )))}
+                                            )))
+                                        )}
                                         {filteredMedicines.length === 0 && <div style={{ padding: '20px', textAlign: 'center' }}>No matches</div>}
                                     </div>
                                 )}

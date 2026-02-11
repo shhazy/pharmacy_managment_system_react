@@ -10,6 +10,30 @@ const ProductLookupModal = ({ isOpen, onClose, onSelect, products = [], inventor
 
     const isGroupedMode = inventoryMethod !== 'Default';
 
+    // Helper function to sort batches based on inventory method
+    const sortBatches = (batches, method) => {
+        if (!batches || batches.length === 0) return [];
+        const sorted = [...batches].filter(b => b.quantity > 0);
+
+        if (method === 'FIFO') {
+            // First In, First Out - sort by created_at or id (oldest first)
+            return sorted.sort((a, b) => {
+                const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+                const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+                return dateA - dateB || (a.id || 0) - (b.id || 0);
+            });
+        } else if (method === 'FEFO') {
+            // First Expired, First Out - sort by expiry_date (earliest expiry first)
+            return sorted.sort((a, b) => {
+                const dateA = a.expiry_date ? new Date(a.expiry_date) : new Date('9999-12-31');
+                const dateB = b.expiry_date ? new Date(b.expiry_date) : new Date('9999-12-31');
+                return dateA - dateB;
+            });
+        }
+        // Default - show all batches as-is (but still filter out zero quantity)
+        return sorted;
+    };
+
     // Reset state when opening
     useEffect(() => {
         if (isOpen) {
@@ -21,16 +45,26 @@ const ProductLookupModal = ({ isOpen, onClose, onSelect, products = [], inventor
     }, [isOpen]);
 
     const filtered = useMemo(() => {
-        if (!searchTerm) return products;
+        let productsToFilter = products;
+
+        // Sort batches for each product according to inventory method
+        if (inventoryMethod) {
+            productsToFilter = products.map(p => ({
+                ...p,
+                stock_inventory: sortBatches(p.stock_inventory || [], inventoryMethod)
+            }));
+        }
+
+        if (!searchTerm) return productsToFilter;
         const lowSearch = searchTerm.toLowerCase();
-        return products.filter(p =>
+        return productsToFilter.filter(p =>
             p.product_name?.toLowerCase().includes(lowSearch) ||
             p.generic_name?.toLowerCase().includes(lowSearch) ||
             p.code?.toLowerCase().includes(lowSearch) ||
             p.product_code?.toLowerCase().includes(lowSearch) ||
             p.name?.toLowerCase().includes(lowSearch)
         );
-    }, [products, searchTerm]);
+    }, [products, searchTerm, inventoryMethod]);
 
     if (!isOpen) return null;
 

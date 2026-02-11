@@ -206,49 +206,69 @@ const RolesManager = ({ tenantId, onBack, currentUser }) => {
 
                 <h4 style={{ marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>Permission Matrix</h4>
 
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr>
-                                <th style={{ textAlign: 'left', padding: '12px', color: 'var(--text-secondary)' }}>Module</th>
-                                {actions.map(action => (
-                                    <th key={action} style={{ textAlign: 'center', padding: '12px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
-                                        {action}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {modules.map(module => (
-                                <tr key={module} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <td style={{ padding: '12px', fontWeight: '500' }}>{module}</td>
-                                    {actions.map(action => {
-                                        // Find permission for this module+action
-                                        const perm = groupedPermissions[module]?.find(p => p.action === action || (!p.action && p.name.endsWith(`:${action}`)));
-                                        const isChecked = perm && formData.permission_ids.includes(perm.id);
+                {permissions.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        No permissions found.
+                    </div>
+                ) : (
+                    <div style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '8px' }}>
+                        {modules.map(module => (
+                            <div key={module} style={{
+                                display: 'flex',
+                                alignItems: 'flex-start', // Align to top in case of wrapping
+                                padding: '16px',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                gap: '24px'
+                            }}>
+                                {/* Left Side: Module Path */}
+                                <div style={{ minWidth: '200px', width: '250px', fontWeight: '500', color: 'white', paddingTop: '2px' }}>
+                                    {module.includes(' > ') ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{module.split(' > ')[0]}</span>
+                                            <span style={{ fontSize: '0.95rem' }}>{module.split(' > ').slice(1).join(' > ')}</span>
+                                        </div>
+                                    ) : (
+                                        <span style={{ fontSize: '0.95rem' }}>{module}</span>
+                                    )}
+                                </div>
 
+                                {/* Right Side: Permissions List */}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', flex: 1 }}>
+                                    {groupedPermissions[module]?.filter(p => p.action).sort((a, b) => a.action.localeCompare(b.action)).map(perm => {
+                                        const isChecked = formData.permission_ids.includes(perm.id);
                                         return (
-                                            <td key={action} style={{ textAlign: 'center', padding: '12px' }}>
-                                                {perm ? (
-                                                    <label style={{ cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isChecked}
-                                                            onChange={() => togglePermission(perm.id)}
-                                                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                                                        />
-                                                    </label>
-                                                ) : (
-                                                    <span style={{ color: 'rgba(255,255,255,0.1)' }}>-</span>
-                                                )}
-                                            </td>
+                                            <label
+                                                key={perm.id}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px',
+                                                    cursor: 'pointer',
+                                                    padding: '4px 8px',
+                                                    borderRadius: '6px',
+                                                    background: isChecked ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                                    border: isChecked ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid transparent',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                                title={perm.description}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => togglePermission(perm.id)}
+                                                    style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                                />
+                                                <span style={{ fontSize: '0.9rem', color: isChecked ? 'white' : 'var(--text-secondary)', textTransform: 'capitalize' }}>
+                                                    {perm.action ? perm.action.replace(/_/g, ' ') : perm.name.split(':')[1]}
+                                                </span>
+                                            </label>
                                         );
                                     })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                     <button onClick={() => setView('list')} className="btn-secondary" style={{ padding: '10px 24px' }}>Cancel</button>

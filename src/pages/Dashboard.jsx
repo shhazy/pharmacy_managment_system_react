@@ -16,6 +16,7 @@ import Reports from './Reports';
 import Payments from './Payments';
 import ChartOfAccounts from './ChartOfAccounts';
 import JournalEntries from './JournalEntries';
+import CashRegisterManager from './CashRegisterManager';
 import InventorySetup from './InventorySetup';
 import CustomerManager from './CustomerManager';
 import CustomerSetup from './CustomerSetup';
@@ -346,6 +347,12 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                         active={activeView === 'Software Payments'}
                                         onClick={() => setActiveView('Software Payments')}
                                     />
+                                    <NavItem
+                                        icon={<Monitor size={20} />}
+                                        label="Cash Registers"
+                                        active={activeView === 'Registers'}
+                                        onClick={() => setActiveView('Registers')}
+                                    />
                                 </>
                             )}
 
@@ -542,13 +549,14 @@ const Dashboard = ({ tenant, isSuperAdmin }) => {
                                                                                                     activeView === 'JournalEntries' ? <JournalEntries tenant={tenant} /> :
                                                                                                         activeView === 'Payments' ? <Payments tenantId={tenant} /> :
                                                                                                             activeView === 'GeneralSettings' ? <GeneralSettings tenantId={tenant} /> :
-                                                                                                                activeView === 'Software Payments' ? <SoftwarePaymentManager tenantId={tenant} /> :
-                                                                                                                    <DashboardOverview tenantId={tenant} />
+                                                                                                                activeView === 'Registers' ? <CashRegisterManager tenantId={tenant} /> :
+                                                                                                                    activeView === 'Software Payments' ? <SoftwarePaymentManager tenantId={tenant} /> :
+                                                                                                                        <DashboardOverview tenantId={tenant} />
                         )}
                     </div>
                     <footer style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
-                        <div>&copy; {new Date().getFullYear()} {tenant ? tenant.toUpperCase() : 'ANTIGRAVITY'} PHARMA. All rights reserved.</div>
-                        <div>System v2.5.0 | Support: help@antigravity.dev</div>
+                        <div>&copy; {new Date().getFullYear()} {tenant ? tenant.toUpperCase() : ' '} PHARMA. All rights reserved.</div>
+                        <div>System v2.5.0 | Support: help@eiglou.dev</div>
                     </footer>
                 </div>
 

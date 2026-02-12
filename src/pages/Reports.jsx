@@ -9,7 +9,7 @@ import BalanceSheet from '../components/reports/BalanceSheet';
 import IncomeStatement from '../components/reports/IncomeStatement';
 import {
     SalesRegister, PurchaseRegister, SupplierLedger,
-    APAging, ARAging, DayBook, GeneralLedger
+    APAging, ARAging, DayBook, GeneralLedger, CashSessionRegister
 } from '../components/reports/index.jsx';
 
 const Reports = () => {
@@ -36,6 +36,7 @@ const Reports = () => {
                 { id: 'purchase-register', name: 'Purchase Register', icon: <Package size={20} />, component: PurchaseRegister, desc: 'Record of stock inventory arrivals (GRNs).' },
                 { id: 'supplier-ledger', name: 'Supplier Ledger', icon: <Users size={20} />, component: SupplierLedger, desc: 'Detailed statement of supplier accounts.' },
                 { id: 'general-ledger', name: 'General Ledger', icon: <ClipboardList size={20} />, component: GeneralLedger, desc: 'In-depth transaction view of all accounts.' },
+                { id: 'cash-sessions', name: 'Cash Session Reconciliation', icon: <DollarSign size={20} />, component: CashSessionRegister, desc: 'Detailed shift summary and cash reconciliation.' },
             ]
         },
         {

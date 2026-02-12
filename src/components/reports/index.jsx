@@ -649,3 +649,226 @@ export const GeneralLedger = () => {
         </div>
     );
 };
+
+export const CashSessionRegister = () => {
+    const [reportData, setReportData] = useState([]);
+    const [selectedSession, setSelectedSession] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [fromDate, setFromDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+    const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const tenantId = localStorage.getItem('tenant_id');
+
+    const fetchSessions = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/cash-registers/sessions?start_date=${fromDate}&end_date=${toDate}`, {
+                headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const data = await res.json();
+            setReportData(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Error fetching sessions:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchSessionDetail = async (sessionId) => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/cash-registers/sessions/${sessionId}`, {
+                headers: { 'X-Tenant-ID': tenantId, 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const data = await res.json();
+            setSelectedSession(data);
+        } catch (error) {
+            console.error('Error fetching session detail:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchSessions(); }, []);
+
+    if (selectedSession) {
+        return (
+            <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <button
+                    onClick={() => setSelectedSession(null)}
+                    className="btn-secondary"
+                    style={{ width: 'fit-content', border: 'none', background: 'transparent', paddingLeft: 0, color: 'var(--primary)' }}
+                >
+                    <ArrowLeft size={18} />
+                    Back to Session List
+                </button>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+                    <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid var(--primary)' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Session Info</p>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'white', marginBottom: '12px' }}>{selectedSession.session_number}</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Register:</span> <span style={{ color: 'white', fontWeight: 'bold' }}>{selectedSession.register?.register_name}</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Cashier ID:</span> <span style={{ color: 'white', fontWeight: 'bold' }}>{selectedSession.user_id}</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Status:</span> <span style={{ color: selectedSession.status === 'open' ? '#10b981' : '#94a3b8', fontWeight: 'bold' }}>{selectedSession.status.toUpperCase()}</span></div>
+                        </div>
+                    </div>
+
+                    <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid #3b82f6' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Reconciliation</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem', marginTop: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Expected:</span> <span style={{ color: 'white' }}>Rs. {parseFloat(selectedSession.expected_cash || 0).toLocaleString()}</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Counted:</span> <span style={{ color: 'white' }}>Rs. {parseFloat(selectedSession.closing_counted_cash || 0).toLocaleString()}</span></div>
+                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>Variance:</span>
+                                <span style={{ fontWeight: '900', color: parseFloat(selectedSession.variance || 0) < 0 ? '#f43f5e' : parseFloat(selectedSession.variance || 0) > 0 ? '#f59e0b' : '#10b981' }}>
+                                    Rs. {parseFloat(selectedSession.variance || 0).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid #a855f7' }}>
+                        <p style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Timeline</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.9rem', marginTop: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Opened:</span> <span style={{ color: 'white' }}>{new Date(selectedSession.opened_at).toLocaleString()}</span></div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#94a3b8' }}>Closed:</span> <span style={{ color: 'white' }}>{selectedSession.closed_at ? new Date(selectedSession.closed_at).toLocaleString() : 'Running...'}</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+                    <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 'bold' }}>
+                            <DollarSign size={18} />
+                            CASH MOVEMENTS
+                        </div>
+                        <table style={{ width: '100%', fontSize: '0.85rem' }}>
+                            <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
+                                <tr style={{ color: '#94a3b8', textTransform: 'uppercase', fontSize: '10px' }}>
+                                    <th style={{ textAlign: 'left', padding: '12px 16px' }}>Type</th>
+                                    <th style={{ textAlign: 'left', padding: '12px 16px' }}>Reason</th>
+                                    <th style={{ textAlign: 'right', padding: '12px 16px' }}>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedSession.cash_movements?.map((m, i) => (
+                                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                                        <td style={{ padding: '12px 16px' }}>
+                                            <span style={{
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold',
+                                                textTransform: 'uppercase',
+                                                background: m.movement_type === 'deposit' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                                                color: m.movement_type === 'deposit' ? '#10b981' : '#f43f5e'
+                                            }}>
+                                                {m.movement_type}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '12px 16px', color: '#cbd5e1' }}>{m.reason}</td>
+                                        <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 'bold', color: 'white' }}>Rs. {parseFloat(m.amount).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                                {(!selectedSession.cash_movements || selectedSession.cash_movements.length === 0) && (
+                                    <tr><td colSpan="3" style={{ padding: '32px', textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>No cash movements recorded</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="glass-card" style={{ padding: 0 }}>
+                        <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--secondary)', fontWeight: 'bold' }}>
+                            <Activity size={18} />
+                            CLOSING DENOMINATIONS
+                        </div>
+                        <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {['notes_5000', 'notes_1000', 'notes_500', 'notes_100', 'notes_50', 'notes_20', 'notes_10', 'notes_5', 'notes_1', 'coins_5', 'coins_2', 'coins_1'].map(key => {
+                                const val = selectedSession.closing_denomination?.[key] || 0;
+                                if (val === 0) return null;
+                                const label = key.replace('_', ' ').replace('notes', 'Rs.').replace('coins', 'Coin').toUpperCase();
+                                return (
+                                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{label}</span>
+                                        <span style={{ color: 'white', fontFamily: 'monospace', fontWeight: 'bold' }}>x {val}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fade-in">
+            <ReportFilterBar
+                onFetch={fetchSessions}
+                loading={loading}
+                fromDate={fromDate}
+                setFromDate={setFromDate}
+                toDate={toDate}
+                setToDate={setToDate}
+            />
+
+            <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginTop: '24px' }}>
+                <table style={{ width: '100%', textAlign: 'left' }}>
+                    <thead>
+                        <tr style={{ background: 'rgba(30, 41, 59, 0.5)', color: '#94a3b8', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            <th style={{ padding: '16px 24px' }}>Session #</th>
+                            <th style={{ padding: '16px 24px' }}>Register</th>
+                            <th style={{ padding: '16px 24px', textAlign: 'right' }}>Cash In</th>
+                            <th style={{ padding: '16px 24px', textAlign: 'right' }}>Returns</th>
+                            <th style={{ padding: '16px 24px', textAlign: 'right' }}>Variance</th>
+                            <th style={{ padding: '16px 24px' }}>Status</th>
+                            <th style={{ padding: '16px 24px', textAlign: 'right' }}>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody style={{ color: '#cbd5e1' }}>
+                        {reportData.map(session => (
+                            <tr key={session.id} style={{ borderBottom: '1px solid rgba(30, 41, 59, 1)', transition: 'background 0.2s' }}>
+                                <td style={{ padding: '16px 24px' }}>
+                                    <div style={{ color: 'white', fontWeight: 'bold' }}>{session.session_number}</div>
+                                    <div style={{ fontSize: '10px', color: '#64748b' }}>{new Date(session.opened_at).toLocaleString()}</div>
+                                </td>
+                                <td style={{ padding: '16px 24px' }}>{session.register?.register_name || `ID: ${session.register_id}`}</td>
+                                <td style={{ padding: '16px 24px', textAlign: 'right' }}>Rs. {parseFloat(session.expected_cash || 0).toLocaleString()}</td>
+                                <td style={{ padding: '16px 24px', textAlign: 'right' }}>---</td>
+                                <td style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 'bold', color: parseFloat(session.variance || 0) < 0 ? '#f43f5e' : parseFloat(session.variance || 0) > 0 ? '#f59e0b' : '#10b981' }}>
+                                    Rs. {parseFloat(session.variance || 0).toLocaleString()}
+                                </td>
+                                <td style={{ padding: '16px 24px' }}>
+                                    <span style={{
+                                        padding: '4px 8px',
+                                        borderRadius: '20px',
+                                        fontSize: '10px',
+                                        fontWeight: 'bold',
+                                        textTransform: 'uppercase',
+                                        background: session.status === 'open' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(148, 163, 184, 0.1)',
+                                        color: session.status === 'open' ? '#10b981' : '#94a3b8'
+                                    }}>
+                                        {session.status}
+                                    </span>
+                                </td>
+                                <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                                    <button
+                                        onClick={() => fetchSessionDetail(session.id)}
+                                        className="btn-secondary"
+                                        style={{ padding: '8px', border: 'none', background: 'transparent', color: 'var(--primary)' }}
+                                    >
+                                        <ChevronRight size={20} />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                        {reportData.length === 0 && !loading && (
+                            <tr><td colSpan="7" style={{ padding: '48px', textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>No sessions found for the selected period</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
